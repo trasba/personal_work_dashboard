@@ -1,8 +1,8 @@
 /**
- * AuraWork AI — Interactive Multi-View Controller, Bulk Archive & Audit Log Store
+ * AuraWork AI — Interactive Multi-View Controller, Bulk Archive, AI Memory Rules & Audit Log Store
  */
 
-// Initial Seed Tasks spanning 4 Tiers
+// Initial Seed Tasks
 const INITIAL_TASKS = [
   {
     id: "task-1",
@@ -160,7 +160,7 @@ const INITIAL_TASKS = [
   }
 ];
 
-// Initial Seed Follow-up Records
+// Initial Follow-ups
 const INITIAL_FOLLOWUPS = [
   {
     id: "follow-1",
@@ -348,7 +348,13 @@ const INITIAL_ARCHIVE_BATCHES = [
   }
 ];
 
-// Immutable AI Action Audit Log with Revert Parameters
+// AI Learned Clean-Up Rules Memory
+const INITIAL_LEARNED_RULES = [
+  { id: "rule-1", type: "subject_prefix", value: "Accepted: *", label: "Subject: 'Accepted:*'", count: 24 },
+  { id: "rule-2", type: "sender_domain", value: "@notifications.jira.com", label: "Sender: '@notifications.jira.com'", count: 18 }
+];
+
+// AI Action Audit Log with Revert Parameters
 const INITIAL_AUDIT_LOG = [
   {
     id: "log-1",
@@ -356,7 +362,7 @@ const INITIAL_AUDIT_LOG = [
     actionType: "TIME_BLOCK_OPTIMIZE",
     summary: "Auto-scheduled 'Finalize Q3 Board Deck' into 1:30 PM slot",
     revertable: true,
-    status: "applied", // 'applied' or 'reverted'
+    status: "applied",
     parameters: {
       type: "SCHEDULE_SLOT",
       slotId: "slot-1330",
@@ -380,13 +386,14 @@ const INITIAL_AUDIT_LOG = [
   }
 ];
 
-// App State Store
-let tasks = JSON.parse(localStorage.getItem("aurawork_v3_tasks")) || INITIAL_TASKS;
-let followups = JSON.parse(localStorage.getItem("aurawork_v3_followups")) || INITIAL_FOLLOWUPS;
-let scheduleSlots = JSON.parse(localStorage.getItem("aurawork_v3_slots")) || INITIAL_SCHEDULE_SLOTS;
-let inboundEmails = JSON.parse(localStorage.getItem("aurawork_v3_emails")) || INITIAL_INBOUND_EMAILS;
-let archiveBatches = JSON.parse(localStorage.getItem("aurawork_v3_archive_batches")) || INITIAL_ARCHIVE_BATCHES;
-let auditLog = JSON.parse(localStorage.getItem("aurawork_v3_audit_log")) || INITIAL_AUDIT_LOG;
+// State Store
+let tasks = JSON.parse(localStorage.getItem("aurawork_v4_tasks")) || INITIAL_TASKS;
+let followups = JSON.parse(localStorage.getItem("aurawork_v4_followups")) || INITIAL_FOLLOWUPS;
+let scheduleSlots = JSON.parse(localStorage.getItem("aurawork_v4_slots")) || INITIAL_SCHEDULE_SLOTS;
+let inboundEmails = JSON.parse(localStorage.getItem("aurawork_v4_emails")) || INITIAL_INBOUND_EMAILS;
+let archiveBatches = JSON.parse(localStorage.getItem("aurawork_v4_archive_batches")) || INITIAL_ARCHIVE_BATCHES;
+let learnedRules = JSON.parse(localStorage.getItem("aurawork_v4_learned_rules")) || INITIAL_LEARNED_RULES;
+let auditLog = JSON.parse(localStorage.getItem("aurawork_v4_audit_log")) || INITIAL_AUDIT_LOG;
 let currentView = "dayflow";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -455,10 +462,11 @@ function setupEventListeners() {
       scheduleSlots = JSON.parse(JSON.stringify(INITIAL_SCHEDULE_SLOTS));
       inboundEmails = JSON.parse(JSON.stringify(INITIAL_INBOUND_EMAILS));
       archiveBatches = JSON.parse(JSON.stringify(INITIAL_ARCHIVE_BATCHES));
+      learnedRules = JSON.parse(JSON.stringify(INITIAL_LEARNED_RULES));
       auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT_LOG));
       saveState();
       renderAll();
-      showToast("Demo data & audit log restored to initial state");
+      showToast("All sample data & AI memory restored to initial state");
     });
   }
 
@@ -559,7 +567,7 @@ function setupEventListeners() {
   }
 }
 
-// NLP Parsing logic
+// NLP Parsing
 function parseNaturalLanguageTask(text) {
   let title = text;
   let duration = 30;
@@ -624,7 +632,7 @@ function handleQuickAddSubmit() {
   showToast(`Added to ${parsed.tier === 'today' ? "Today's Focus" : "Up Next"}: "${newTask.title}"`);
 }
 
-// AI Auto-Scheduling with Audit Logging
+// AI Auto-Scheduling
 function runAutoSchedulingAI() {
   let scheduledCount = 0;
   const unassignedTasks = tasks.filter(t => !t.completed && t.tier === "today" && !t.scheduledSlotId);
@@ -715,7 +723,6 @@ function setTaskTier(taskId, newTier) {
   showToast(`Moved to ${newTier.toUpperCase()}`);
 }
 
-// Task Completion & Management
 function toggleTaskCompletion(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -904,11 +911,9 @@ function executeBulkArchive() {
     batchSummaries.push(`${b.count} ${b.title}`);
   });
 
-  // Remove archived batches from active proposals
   archiveBatches = archiveBatches.filter(b => !b.selected);
 
-  // IMMUTABLE AUDIT LOG ENTRY
-  const logEntry = logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
+  logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
     type: "OUTLOOK_BULK_ARCHIVE",
     mailIds: allArchivedMailIds,
     batches: selectedBatches,
@@ -919,6 +924,96 @@ function executeBulkArchive() {
   saveState();
   renderAll();
   showToast(`Archived ${totalArchivedCount} emails. Action recorded in AI Audit Log.`);
+}
+
+// ==========================================================================
+// AI LEARNING & ADAPTIVE RULES MEMORY
+// ==========================================================================
+function teachAiCleanUpRule(batchId, ruleType) {
+  const batch = archiveBatches.find(b => b.id === batchId);
+  if (!batch) return;
+
+  let newRule = null;
+  if (ruleType === "sender") {
+    const domain = batch.id === "batch-alerts" ? "@notifications.jira.com" : batch.id === "batch-marketing" ? "@gartner.com" : "@google.com";
+    newRule = {
+      id: `rule-${Date.now()}`,
+      type: "sender_domain",
+      value: domain,
+      label: `Sender: '${domain}'`,
+      count: batch.count
+    };
+  } else if (ruleType === "subject") {
+    const pattern = batch.id === "batch-rsvp" ? "Accepted: *" : batch.id === "batch-alerts" ? "[BUILD *]" : "Webinar:*";
+    newRule = {
+      id: `rule-${Date.now()}`,
+      type: "subject_pattern",
+      value: pattern,
+      label: `Subject: '${pattern}'`,
+      count: batch.count
+    };
+  }
+
+  if (newRule) {
+    // Avoid duplicate rules
+    if (!learnedRules.some(r => r.label === newRule.label)) {
+      learnedRules.push(newRule);
+
+      // Log AI memory update into audit log
+      logAiAction("MEMORY_LEARN_RULE", `User trained AI rule: Always propose archiving ${newRule.label}`, {
+        type: "RULE_ADDED",
+        ruleId: newRule.id,
+        ruleData: newRule
+      });
+
+      saveState();
+      renderAll();
+      showToast(`AI learned: Will auto-propose archiving emails matching ${newRule.label}!`);
+    } else {
+      showToast(`Rule ${newRule.label} is already active in AI memory.`);
+    }
+  }
+}
+
+function teachEmailCleanUp(emailId, ruleType) {
+  const mail = inboundEmails.find(e => e.id === emailId);
+  if (!mail) return;
+
+  let ruleLabel = "";
+  if (ruleType === "sender") {
+    ruleLabel = `Sender: '${mail.sender.split('(')[0].trim()}'`;
+  } else {
+    ruleLabel = `Subject contains: '${mail.subject.substring(0, 24)}...'`;
+  }
+
+  const newRule = {
+    id: `rule-${Date.now()}`,
+    type: ruleType,
+    value: mail.subject,
+    label: ruleLabel,
+    count: 1
+  };
+
+  learnedRules.push(newRule);
+  inboundEmails = inboundEmails.filter(e => e.id !== emailId);
+
+  logAiAction("MEMORY_LEARN_RULE", `Trained clean-up memory on ${ruleLabel} and archived email`, {
+    type: "RULE_ADDED",
+    ruleId: newRule.id,
+    emailId: mail.id
+  });
+
+  saveState();
+  renderAll();
+  showToast(`Learned! Future emails from this ${ruleType} will be proposed for archive.`);
+}
+
+function removeLearnedRule(ruleId) {
+  const rule = learnedRules.find(r => r.id === ruleId);
+  learnedRules = learnedRules.filter(r => r.id !== ruleId);
+  saveState();
+  renderBulkArchiveCockpit();
+  showToast(`Removed rule: ${rule?.label || 'Rule'}`);
 }
 
 // ==========================================================================
@@ -949,14 +1044,12 @@ function revertAiAction(logId) {
   const params = entry.parameters;
 
   if (params.type === "OUTLOOK_BULK_ARCHIVE") {
-    // Restore the batches back to active proposals
     if (params.batches) {
       params.batches.forEach(b => archiveBatches.push(b));
     }
     entry.status = "reverted";
     showToast(`Undo successful: Moved ${params.mailIds.length} emails back to Outlook Inbox!`);
   } else if (params.type === "BATCH_SCHEDULE") {
-    // Unassign focus slots
     params.scheduledDetails.forEach(d => {
       const slot = scheduleSlots.find(s => s.id === d.slotId);
       if (slot) {
@@ -992,20 +1085,24 @@ function revertAiAction(logId) {
     });
     entry.status = "reverted";
     showToast(`Reverted ${params.taskIds.length} tasks back to ${params.fromTier}.`);
+  } else if (params.type === "RULE_ADDED") {
+    learnedRules = learnedRules.filter(r => r.id !== params.ruleId);
+    entry.status = "reverted";
+    showToast("Reverted learned clean-up memory rule.");
   }
 
   saveState();
   renderAll();
 }
 
-// State Persistence
 function saveState() {
-  localStorage.setItem("aurawork_v3_tasks", JSON.stringify(tasks));
-  localStorage.setItem("aurawork_v3_followups", JSON.stringify(followups));
-  localStorage.setItem("aurawork_v3_slots", JSON.stringify(scheduleSlots));
-  localStorage.setItem("aurawork_v3_emails", JSON.stringify(inboundEmails));
-  localStorage.setItem("aurawork_v3_archive_batches", JSON.stringify(archiveBatches));
-  localStorage.setItem("aurawork_v3_audit_log", JSON.stringify(auditLog));
+  localStorage.setItem("aurawork_v4_tasks", JSON.stringify(tasks));
+  localStorage.setItem("aurawork_v4_followups", JSON.stringify(followups));
+  localStorage.setItem("aurawork_v4_slots", JSON.stringify(scheduleSlots));
+  localStorage.setItem("aurawork_v4_emails", JSON.stringify(inboundEmails));
+  localStorage.setItem("aurawork_v4_archive_batches", JSON.stringify(archiveBatches));
+  localStorage.setItem("aurawork_v4_learned_rules", JSON.stringify(learnedRules));
+  localStorage.setItem("aurawork_v4_audit_log", JSON.stringify(auditLog));
 }
 
 // Render Hub
@@ -1121,7 +1218,7 @@ function renderTimeline() {
   }).join("");
 }
 
-// Mini Inbound Digest on Day Flow
+// Mini Inbound Digest
 function renderMiniInboundDigest() {
   const container = document.getElementById("digestItemsContainer");
   const badge = document.getElementById("miniEmailCountBadge");
@@ -1247,11 +1344,13 @@ function renderFollowups() {
   `).join("");
 }
 
-// Bulk Archive Cockpit
+// Bulk Archive Cockpit & Learning Chips
 function renderBulkArchiveCockpit() {
   const container = document.getElementById("bulkProposalsList");
   const totalCountEl = document.getElementById("bulkArchiveCount");
   const selectedCountEl = document.getElementById("selectedArchiveCount");
+  const rulesCountEl = document.getElementById("learnedRulesCount");
+  const rulesChipsContainer = document.getElementById("learnedRulesChips");
   if (!container) return;
 
   const totalPossible = archiveBatches.reduce((acc, b) => acc + b.count, 0);
@@ -1259,6 +1358,21 @@ function renderBulkArchiveCockpit() {
 
   if (totalCountEl) totalCountEl.textContent = totalPossible;
   if (selectedCountEl) selectedCountEl.textContent = selectedCount;
+  if (rulesCountEl) rulesCountEl.textContent = learnedRules.length;
+
+  // Render Learned AI Rules Chips
+  if (rulesChipsContainer) {
+    if (learnedRules.length === 0) {
+      rulesChipsContainer.innerHTML = `<span style="font-size: 0.74rem; color: #c084fc;">No learned patterns yet</span>`;
+    } else {
+      rulesChipsContainer.innerHTML = learnedRules.map(rule => `
+        <span class="rule-chip" title="Clean-up Memory Rule: ${escapeHtml(rule.label)}">
+          <span>⚡ ${escapeHtml(rule.label)}</span>
+          <button class="del-rule-btn" onclick="removeLearnedRule('${rule.id}')" title="Delete rule">✕</button>
+        </span>
+      `).join("");
+    }
+  }
 
   if (archiveBatches.length === 0) {
     container.innerHTML = `
@@ -1285,7 +1399,15 @@ function renderBulkArchiveCockpit() {
           <div class="bulk-cat-samples">${escapeHtml(batch.sampleSubjects)}</div>
         </div>
       </div>
-      <span class="bulk-cat-count-badge">${batch.count} emails</span>
+      <div class="bulk-cat-actions">
+        <button class="teach-rule-btn" onclick="teachAiCleanUpRule('${batch.id}', 'sender')" title="Teach AI to always propose archiving from this sender/domain">
+          🧠 Always this sender
+        </button>
+        <button class="teach-rule-btn" onclick="teachAiCleanUpRule('${batch.id}', 'subject')" title="Teach AI to always propose archiving matching subjects">
+          🧠 Always this subject
+        </button>
+        <span class="bulk-cat-count-badge">${batch.count} emails</span>
+      </div>
     </div>
   `).join("");
 }
@@ -1316,15 +1438,20 @@ function renderMailFeedView() {
         <button class="btn btn-magic btn-sm" onclick="convertEmailToTask('${mail.id}')">
           + Add to Today's Focus
         </button>
-        <button class="chip chip-ghost" onclick="dismissEmail('${mail.id}')">
-          Dismiss
-        </button>
+        <div style="display: flex; gap: 6px;">
+          <button class="teach-rule-btn" onclick="teachEmailCleanUp('${mail.id}', 'sender')" title="Teach AI to archive future emails from this sender">
+            🧠 Learn Sender
+          </button>
+          <button class="chip chip-ghost" onclick="dismissEmail('${mail.id}')">
+            Dismiss
+          </button>
+        </div>
       </div>
     </div>
   `).join("");
 }
 
-// VIEW 5: Render AI Audit Log with 1-Click Revert
+// AI Audit Log View
 function renderAuditLogView() {
   const container = document.getElementById("auditLogListContainer");
   const countBadge = document.getElementById("auditLogCountBadge");
@@ -1365,7 +1492,6 @@ function renderAuditLogView() {
   `).join("");
 }
 
-// Metrics
 function renderMetrics() {
   const todayTasks = tasks.filter(t => t.tier === "today" && !t.completed);
   const totalMinutes = todayTasks.reduce((acc, t) => acc + (t.duration || 30), 0);
@@ -1395,7 +1521,6 @@ function renderMetrics() {
   if (mailBadge) mailBadge.textContent = inboundEmails.length;
 }
 
-// Toast helper
 function showToast(msg) {
   const hub = document.getElementById("toastHub");
   if (!hub) return;
@@ -1423,7 +1548,7 @@ function escapeHtml(str) {
   );
 }
 
-// Exports
+// Window exports
 window.switchView = switchView;
 window.runAutoSchedulingAI = runAutoSchedulingAI;
 window.runAiAutoTriage = runAiAutoTriage;
@@ -1440,3 +1565,6 @@ window.promptAddFollowUp = promptAddFollowUp;
 window.toggleArchiveBatchSelection = toggleArchiveBatchSelection;
 window.executeBulkArchive = executeBulkArchive;
 window.revertAiAction = revertAiAction;
+window.teachAiCleanUpRule = teachAiCleanUpRule;
+window.teachEmailCleanUp = teachEmailCleanUp;
+window.removeLearnedRule = removeLearnedRule;

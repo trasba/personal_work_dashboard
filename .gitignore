@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 .bun/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
 # Build and test outputs
 test-results/
@@ -27,3 +31,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 bun.lockb
+
+# images
+*.png

@@ -6,7 +6,7 @@
   <title>AuraWork AI — Daily Work & Focus Dashboard</title>
   <meta name="description" content="AI-powered executive daily work dashboard, calendar time-blocking, tiered task structuring, mailbox assistant, follow-up tracker, and audit log.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -125,7 +125,6 @@
            VIEW 1: DAY FLOW (HOME COMMAND CENTER)
            ========================================================================= -->
       <section class="view-container active" id="view-dayflow">
-        <!-- AI Smart Briefing & Nudges Banner -->
         <div class="ai-briefing-card" id="aiBriefingBanner">
           <div class="ai-avatar-pulse">
             <div class="spark-core">
@@ -154,9 +153,7 @@
           </div>
         </div>
 
-        <!-- Central Workspace Grid -->
         <div class="dashboard-grid">
-          <!-- LEFT COLUMN: Today's Focused Tasks & Quick Add -->
           <div class="panel tasks-panel">
             <div class="panel-header">
               <div class="panel-title-wrap">
@@ -168,7 +165,6 @@
               </button>
             </div>
 
-            <!-- Natural Language Quick-Add Bar -->
             <div class="quick-add-box">
               <div class="quick-add-input-wrap">
                 <div class="input-icon">
@@ -195,12 +191,10 @@
               </div>
             </div>
 
-            <!-- Today's Task List Container -->
             <div class="task-list" id="taskListContainer">
               <!-- Injected by app.js -->
             </div>
 
-            <!-- Mini Discovered from Inbound Emails preview -->
             <div class="inbox-digest-card">
               <div class="digest-header">
                 <div class="digest-title-box">
@@ -215,7 +209,6 @@
             </div>
           </div>
 
-          <!-- RIGHT COLUMN: Daily Timeline & Smart Time Blocks -->
           <div class="panel timeline-panel">
             <div class="panel-header">
               <div class="panel-title-wrap">
@@ -281,9 +274,7 @@
           </div>
         </div>
 
-        <!-- Tier Buckets Grid -->
         <div class="tiers-grid">
-          <!-- TIER 1 -->
           <div class="tier-column" id="tier-col-today">
             <div class="tier-header tier-1">
               <div class="tier-title-wrap">
@@ -295,7 +286,6 @@
             <div class="tier-dropzone" id="tierListToday"></div>
           </div>
 
-          <!-- TIER 2 -->
           <div class="tier-column" id="tier-col-upcoming">
             <div class="tier-header tier-2">
               <div class="tier-title-wrap">
@@ -307,7 +297,6 @@
             <div class="tier-dropzone" id="tierListUpcoming"></div>
           </div>
 
-          <!-- TIER 3 -->
           <div class="tier-column" id="tier-col-backlog">
             <div class="tier-header tier-3">
               <div class="tier-title-wrap">
@@ -319,7 +308,6 @@
             <div class="tier-dropzone" id="tierListBacklog"></div>
           </div>
 
-          <!-- TIER 4 -->
           <div class="tier-column" id="tier-col-someday">
             <div class="tier-header tier-4">
               <div class="tier-title-wrap">
@@ -379,27 +367,41 @@
       </section>
 
       <!-- =========================================================================
-           VIEW 4: AI MAIL FEED & BULK ARCHIVE COCKPIT
+           VIEW 4: AI MAIL FEED, BULK ARCHIVE & LEARNING MEMORY
            ========================================================================= -->
       <section class="view-container" id="view-mailfeed">
         <div class="inventory-header-bar">
           <div>
             <h2 class="view-heading">AI Mailbox & Smart Outlook Assistant</h2>
-            <p class="view-subheading">Extract actionable tasks from incoming threads and safely clean low-signal emails with human-in-the-loop review.</p>
+            <p class="view-subheading">Extract actionable tasks from incoming threads, safely clean low-signal emails, and train the AI memory rules.</p>
           </div>
           <div class="sync-status-badge">
             <span class="dot-live"></span> Connected to Outlook & Gmail • Last polled 2m ago
           </div>
         </div>
 
-        <!-- NEW: AI Bulk Archive Proposal Cockpit -->
+        <!-- NEW: AI Learning Rules Banner -->
+        <div class="ai-learning-banner">
+          <div class="learning-banner-left">
+            <div class="brain-icon">🧠</div>
+            <div>
+              <h4 class="learning-title">Adaptive AI Clean-Up Memory (<span id="learnedRulesCount">2</span> Active Patterns)</h4>
+              <p class="learning-desc">The AI automatically learns from your confirmations. Future emails matching these senders or subjects get pre-flagged for one-click clean-up.</p>
+            </div>
+          </div>
+          <div class="learned-chips-container" id="learnedRulesChips">
+            <!-- Injected by app.js -->
+          </div>
+        </div>
+
+        <!-- AI Bulk Archive Proposal Cockpit -->
         <div class="bulk-archive-panel">
           <div class="bulk-archive-header">
             <div class="bulk-header-info">
               <span class="sparkle-icon" style="font-size: 1.2rem;">⚡</span>
               <div>
                 <h3 class="bulk-title">AI Proposed Clean-Up: <span id="bulkArchiveCount">16</span> Low-Signal Emails</h3>
-                <p class="bulk-desc">The AI identified low-signal calendar RSVPs, automated build alerts, and newsletters that are safe to archive.</p>
+                <p class="bulk-desc">The AI clustered low-signal emails based on trained patterns and calendar heuristics.</p>
               </div>
             </div>
             <div class="bulk-header-actions">
@@ -410,7 +412,6 @@
             </div>
           </div>
 
-          <!-- Proposal Categories Accordion / Selection -->
           <div class="bulk-proposals-list" id="bulkProposalsList">
             <!-- Injected by app.js -->
           </div>

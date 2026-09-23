@@ -1493,8 +1493,76 @@ body.light-theme .ai-briefing-text {
 .btn-ping:hover { background: var(--accent-primary); color: white; }
 
 /* ==========================================================================
-   VIEW 4: AI MAIL FEED & BULK ARCHIVE COCKPIT
+   VIEW 4: AI MAIL FEED, BULK ARCHIVE & LEARNING MEMORY
    ========================================================================== */
+.ai-learning-banner {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.25), rgba(30, 27, 75, 0.45));
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.learning-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brain-icon {
+  font-size: 1.6rem;
+  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.6));
+}
+
+.learning-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f3e8ff;
+}
+
+.learning-desc {
+  font-size: 0.78rem;
+  color: #d8b4fe;
+  margin-top: 2px;
+}
+
+.learned-chips-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rule-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.74rem;
+  color: #e9d5ff;
+  font-weight: 600;
+}
+
+.rule-chip .del-rule-btn {
+  background: transparent;
+  border: none;
+  color: #c084fc;
+  cursor: pointer;
+  padding: 1px 3px;
+  font-size: 0.8rem;
+}
+
+.rule-chip .del-rule-btn:hover {
+  color: #ef4444;
+}
+
 .bulk-archive-panel {
   background: linear-gradient(135deg, rgba(20, 26, 40, 0.95), rgba(15, 23, 42, 0.95));
   border: 1px solid rgba(99, 102, 241, 0.35);
@@ -1580,6 +1648,29 @@ body.light-theme .ai-briefing-text {
   font-size: 0.75rem;
   color: var(--text-tertiary);
   margin-top: 2px;
+}
+
+.bulk-cat-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teach-rule-btn {
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #d8b4fe;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.teach-rule-btn:hover {
+  background: rgba(168, 85, 247, 0.3);
+  color: white;
 }
 
 .bulk-cat-count-badge {
@@ -1675,6 +1766,8 @@ body.light-theme .ai-briefing-text {
   align-items: center;
   justify-content: space-between;
   margin-top: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ==========================================================================
