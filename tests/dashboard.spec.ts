@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ request }) => {
   // Ensure pristine test database state
-  await request.post('http://127.0.0.1:8000/api/database/reset');
+  await request.post('http://127.0.0.1:8000/api/database/reset?seed=true');
 });
 
-test('Verify Bulk Archive cockpit, AI Learning Memory rules, and 1-click Revert', async ({ page }) => {
+test('Verify Productive Flow: Task Creation Modal, Outlook Calendar, Mailbox Clean-up, Audit Log, and Clean DB', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', msg => {
     if (msg.type() === 'error') errors.push(msg.text());
@@ -15,26 +15,37 @@ test('Verify Bulk Archive cockpit, AI Learning Memory rules, and 1-click Revert'
   // Test against running FastAPI server (serves frontend + SQLite API)
   await page.goto('http://127.0.0.1:8000/');
 
-  // 1. Verify SQLite Connected status in sidebar
+  // 1. Verify SQLite Connected status in sidebar and Outlook Calendar indicator
   const dbStatus = page.locator('#dbSyncStatus');
   await expect(dbStatus).toBeVisible();
   await expect(dbStatus).toHaveText('SQLite Live');
 
-  // 2. Verify Calendar Lookahead Day Selector
-  await expect(page.locator('#calendarDaySelector')).toBeVisible();
-  const tomorrowBtn = page.locator('.cal-day-btn[data-days="2"]');
-  await tomorrowBtn.click();
-  await expect(page.locator('#timelineHeaderTitle')).toHaveText("Tomorrow's Schedule & Time Blocks");
+  // Verify Follow-ups is omitted from active navigation
+  await expect(page.locator('#nav-followups')).toHaveCount(0);
 
-  const fiveDayBtn = page.locator('.cal-day-btn[data-days="5"]');
-  await fiveDayBtn.click();
-  await expect(page.locator('#timelineHeaderTitle')).toHaveText("Next 5 Workdays Schedule Overview");
+  // Verify Outlook Calendar in connected sources (Google Calendar removed)
+  await expect(page.locator('.sidebar-integrations')).toContainText('Outlook Calendar');
+  await expect(page.locator('.sidebar-integrations')).not.toContainText('Google Calendar');
 
-  const todayBtn = page.locator('.cal-day-btn[data-days="1"]');
-  await todayBtn.click();
-  await expect(page.locator('#timelineHeaderTitle')).toHaveText("Today's Schedule & Time Blocks");
+  // 2. Test Task Creation via New Task Modal
+  await page.click('#openCreateTaskModalBtn');
+  const taskModal = page.locator('#taskModalBackdrop');
+  await expect(taskModal).toBeVisible();
 
-  // 3. Navigate to AI Mail Feed
+  await page.fill('#taskTitleInput', 'Prepare Q4 Product Delivery Roadmap');
+  await page.selectOption('#taskPrioritySelect', 'high');
+  await page.selectOption('#taskDurationSelect', '45');
+  await page.fill('#taskCategoryInput', 'Product Roadmap');
+  await page.selectOption('#taskTierSelect', 'today');
+
+  await page.click('#saveTaskModalBtn');
+  await expect(taskModal).not.toBeVisible();
+
+  // Verify new task appears in Today's Focus list
+  const taskList = page.locator('#taskListContainer');
+  await expect(taskList).toContainText('Prepare Q4 Product Delivery Roadmap');
+
+  // 3. Navigate to AI Mail Feed and test clean-up
   await page.click('#nav-mailfeed');
   await expect(page.locator('#view-mailfeed')).toBeVisible();
 
@@ -50,18 +61,14 @@ test('Verify Bulk Archive cockpit, AI Learning Memory rules, and 1-click Revert'
   // Verify learning rule was added
   await expect(page.locator('.rule-chip')).toHaveCount(initialChipCount + 1);
 
-  // Take screenshot of AI Learning Memory Banner + Bulk Archive
-  await page.screenshot({ path: 'learning-memory-preview.png', fullPage: true });
-
   // Execute Bulk Archive
   await page.click('#executeBulkArchiveBtn');
   await expect(page.locator('.bulk-category-card')).toHaveCount(0);
 
-  // 4. Navigate to AI Action & Audit Log
+  // 4. Navigate to AI Action & Audit Log and Revert
   await page.click('#nav-auditlog');
   await expect(page.locator('#view-auditlog')).toBeVisible();
 
-  // Verify memory learning rule was recorded in the audit log
   const auditRows = page.locator('.audit-log-row');
   await expect(auditRows.locator('text=MEMORY_LEARN_RULE')).toBeVisible();
 
@@ -73,5 +80,25 @@ test('Verify Bulk Archive cockpit, AI Learning Memory rules, and 1-click Revert'
   await page.click('#nav-mailfeed');
   await expect(page.locator('.bulk-category-card')).toHaveCount(3);
 
+  // 5. Test Database Clean / Production Slate feature with automatic backup
+  await page.click('#dbSettingsBtn');
+  const settingsMenu = page.locator('#settingsDropdownMenu');
+  await expect(settingsMenu).toBeVisible();
+
+  await page.click('#cleanDbOptionBtn');
+  const cleanModal = page.locator('#cleanDbModalBackdrop');
+  await expect(cleanModal).toBeVisible();
+
+  await page.click('#confirmCleanDbBtn');
+  await expect(cleanModal).not.toBeVisible();
+
+  // Verify database is cleared
+  await page.click('#nav-dayflow');
+  await expect(page.locator('#taskListContainer')).toContainText("No tasks assigned to Today's Focus");
+
+  // Single static screenshot for layout verification
+  await page.screenshot({ path: 'productive-clean-dashboard.png' });
+
   expect(errors).toEqual([]);
 });
+

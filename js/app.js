@@ -3,7 +3,7 @@
  * Orchestrates modular sub-controllers, state sync, and DOM event bindings.
  */
 
-import { state, saveState, resetLocalState } from "./state.js";
+import { state, saveState, resetLocalState, clearLocalState } from "./state.js";
 import { apiRequest } from "./api.js";
 import { parseNaturalLanguageTask } from "./nlp.js";
 import { showToast, escapeHtml } from "./ui/toast.js";
@@ -22,12 +22,16 @@ export function renderAll() {
   renderTimeline();
   renderMiniInboundDigest();
   renderInventoryTiers();
-  renderFollowups();
+  // Followups omitted for first productive version, preserved in codebase
+  if (state.currentView === "followups") {
+    renderFollowups();
+  }
   renderBulkArchiveCockpit();
   renderMailFeedView();
   renderAuditLogView();
   renderMetrics();
 }
+
 
 // Navigation & View Switching
 export function switchView(viewName) {
@@ -110,6 +114,81 @@ function handleQuickAddSubmit() {
   showToast(`Added to ${parsed.tier === 'today' ? "Today's Focus" : "Up Next"}: "${newTask.title}"`);
 }
 
+// Task Modal Functions
+export function openTaskModal(defaultTier = "today") {
+  const modal = document.getElementById("taskModalBackdrop");
+  const tierSelect = document.getElementById("taskTierSelect");
+  const titleInput = document.getElementById("taskTitleInput");
+  if (tierSelect) tierSelect.value = defaultTier;
+  if (modal) modal.style.display = "flex";
+  if (titleInput) {
+    titleInput.value = "";
+    setTimeout(() => titleInput.focus(), 50);
+  }
+}
+
+export function closeTaskModal() {
+  const modal = document.getElementById("taskModalBackdrop");
+  if (modal) modal.style.display = "none";
+}
+
+// Database Clean / Settings Modal Functions
+export function openCleanDbModal() {
+  const modal = document.getElementById("cleanDbModalBackdrop");
+  const dropdown = document.getElementById("settingsDropdownMenu");
+  if (dropdown) dropdown.style.display = "none";
+  if (modal) modal.style.display = "flex";
+}
+
+export function closeCleanDbModal() {
+  const modal = document.getElementById("cleanDbModalBackdrop");
+  if (modal) modal.style.display = "none";
+}
+
+function handleCreateTaskSubmit(e) {
+  e.preventDefault();
+  const titleInput = document.getElementById("taskTitleInput");
+  const prioritySelect = document.getElementById("taskPrioritySelect");
+  const durationSelect = document.getElementById("taskDurationSelect");
+  const categoryInput = document.getElementById("taskCategoryInput");
+  const tierSelect = document.getElementById("taskTierSelect");
+
+  const title = titleInput?.value.trim();
+  if (!title) return;
+
+  const newTask = {
+    id: `task-${Date.now()}`,
+    title: title,
+    duration: parseInt(durationSelect?.value) || 30,
+    priority: prioritySelect?.value || "medium",
+    tier: tierSelect?.value || "today",
+    category: categoryInput?.value.trim() || "General",
+    completed: false,
+    scheduledSlotId: null,
+    source: "manual"
+  };
+
+  state.tasks.unshift(newTask);
+
+  // Sync to SQLite
+  apiRequest("/api/tasks", "POST", {
+    id: newTask.id,
+    title: newTask.title,
+    duration: newTask.duration,
+    priority: newTask.priority,
+    tier: newTask.tier,
+    category: newTask.category,
+    completed: newTask.completed,
+    scheduled_slot_id: null,
+    source: newTask.source
+  });
+
+  saveState();
+  closeTaskModal();
+  renderAll();
+  showToast(`Created task: "${newTask.title}"`);
+}
+
 function setupEventListeners() {
   // Theme Toggle
   const themeBtn = document.getElementById("themeToggleBtn");
@@ -121,15 +200,85 @@ function setupEventListeners() {
     });
   }
 
-  // Reset Demo Data
-  const resetBtn = document.getElementById("resetDataBtn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", async () => {
-      resetLocalState();
-      await apiRequest("/api/database/reset", "POST");
-      await fetchFromBackend();
-      showToast("All sample data & AI memory restored to initial state");
+  // Settings Dropdown Toggle
+  const dbSettingsBtn = document.getElementById("dbSettingsBtn");
+  const settingsMenu = document.getElementById("settingsDropdownMenu");
+  if (dbSettingsBtn && settingsMenu) {
+    dbSettingsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isShown = settingsMenu.style.display === "flex";
+      settingsMenu.style.display = isShown ? "none" : "flex";
     });
+    document.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+    });
+  }
+
+  // Clean Database Confirmation Trigger
+  const cleanDbOptionBtn = document.getElementById("cleanDbOptionBtn");
+  if (cleanDbOptionBtn) {
+    cleanDbOptionBtn.addEventListener("click", openCleanDbModal);
+  }
+  const closeCleanDbBtn = document.getElementById("closeCleanDbModalBtn");
+  if (closeCleanDbBtn) closeCleanDbBtn.addEventListener("click", closeCleanDbModal);
+  const cancelCleanDbBtn = document.getElementById("cancelCleanDbBtn");
+  if (cancelCleanDbBtn) cancelCleanDbBtn.addEventListener("click", closeCleanDbModal);
+
+  // Execute Clean Database Action
+  const confirmCleanDbBtn = document.getElementById("confirmCleanDbBtn");
+  if (confirmCleanDbBtn) {
+    confirmCleanDbBtn.addEventListener("click", async () => {
+      closeCleanDbModal();
+      try {
+        const res = await apiRequest("/api/database/clean", "POST");
+        clearLocalState();
+        await fetchOutlookCalendar(state.calendarDaysAhead);
+        renderAll();
+        const backupNote = res?.backup_file ? ` (Backup: ${res.backup_file})` : "";
+        showToast(`Workspace cleaned for production!${backupNote}`);
+      } catch (err) {
+        showToast("Error cleaning database.");
+      }
+    });
+  }
+
+  // Manual Backup Creation
+  const createBackupBtn = document.getElementById("createBackupOptionBtn");
+  if (createBackupBtn) {
+    createBackupBtn.addEventListener("click", async () => {
+      try {
+        const res = await apiRequest("/api/database/backup", "POST");
+        showToast(`Backup created successfully: ${res?.backup_file}`);
+      } catch (err) {
+        showToast("Error creating backup.");
+      }
+    });
+  }
+
+  // Load Demo Data Option
+  const loadDemoBtn = document.getElementById("loadDemoDataBtn");
+  if (loadDemoBtn) {
+    loadDemoBtn.addEventListener("click", async () => {
+      resetLocalState();
+      await apiRequest("/api/database/reset?seed=true", "POST");
+      await fetchFromBackend();
+      showToast("Sample demo data & rules restored");
+    });
+  }
+
+  // Task Creation Modal Triggers
+  const openModalBtn = document.getElementById("openCreateTaskModalBtn");
+  if (openModalBtn) {
+    openModalBtn.addEventListener("click", () => openTaskModal("today"));
+  }
+  const closeModalBtn = document.getElementById("closeTaskModalBtn");
+  if (closeModalBtn) closeModalBtn.addEventListener("click", closeTaskModal);
+  const cancelModalBtn = document.getElementById("cancelTaskModalBtn");
+  if (cancelModalBtn) cancelModalBtn.addEventListener("click", closeTaskModal);
+
+  const taskForm = document.getElementById("createTaskForm");
+  if (taskForm) {
+    taskForm.addEventListener("submit", handleCreateTaskSubmit);
   }
 
   // Auto-Schedule Day AI Button
@@ -137,6 +286,7 @@ function setupEventListeners() {
   if (autoScheduleBtn) {
     autoScheduleBtn.addEventListener("click", runAutoSchedulingAI);
   }
+
 
   // Nudge Action Buttons
   const applyNudgeBtn = document.getElementById("applyNudgeScheduleBtn");
@@ -275,7 +425,7 @@ async function fetchFromBackend() {
 
     // 1. Fetch Tasks
     const dbTasks = await apiRequest("/api/tasks");
-    if (Array.isArray(dbTasks) && dbTasks.length > 0) {
+    if (Array.isArray(dbTasks)) {
       state.tasks = dbTasks.map(t => ({
         id: t.id,
         title: t.title,
@@ -291,7 +441,7 @@ async function fetchFromBackend() {
 
     // 2. Fetch Rules
     const dbRules = await apiRequest("/api/rules");
-    if (Array.isArray(dbRules) && dbRules.length > 0) {
+    if (Array.isArray(dbRules)) {
       state.learnedRules = dbRules.map(r => ({
         id: r.id,
         type: r.rule_type,
@@ -303,7 +453,7 @@ async function fetchFromBackend() {
 
     // 3. Fetch Followups
     const dbFollowups = await apiRequest("/api/followups");
-    if (Array.isArray(dbFollowups) && dbFollowups.length > 0) {
+    if (Array.isArray(dbFollowups)) {
       state.followups = dbFollowups.map(f => ({
         id: f.id,
         person: f.person,
@@ -318,7 +468,7 @@ async function fetchFromBackend() {
 
     // 4. Fetch Audit Logs
     const dbAudit = await apiRequest("/api/audit");
-    if (Array.isArray(dbAudit) && dbAudit.length > 0) {
+    if (Array.isArray(dbAudit)) {
       state.auditLog = dbAudit.map(a => ({
         id: a.id,
         timestamp: a.timestamp,
@@ -365,7 +515,11 @@ window.aurawork = {
   logAiAction,
   revertAiAction,
   renderBulkArchiveCockpit,
-  renderAuditLogView
+  renderAuditLogView,
+  openTaskModal,
+  closeTaskModal,
+  openCleanDbModal,
+  closeCleanDbModal
 };
 
 // Also expose legacy top-level window aliases so inline onclicks continue seamlessly

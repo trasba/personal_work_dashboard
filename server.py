@@ -142,10 +142,25 @@ def get_system_health():
     }
 
 @app.post("/api/database/reset", tags=["System"])
-def reset_database():
-    """Resets database to initial prototype seeds."""
-    db.init_db(force_reset=True)
-    return {"success": True, "message": "Database reset to initial demo seeds"}
+def reset_database(seed: bool = True):
+    """Resets database schema and re-seeds prototype data if seed=True."""
+    db.init_db(force_reset=True, seed_dummy=seed)
+    return {"success": True, "message": "Database reset to initial demo seeds" if seed else "Database reset to clean schema"}
+
+@app.post("/api/database/clean", tags=["System"])
+def clean_database():
+    """Wipes all tasks, followups, audit logs and rules with an automatic timestamped backup."""
+    result = db.clear_all_data(create_backup_first=True)
+    return result
+
+@app.post("/api/database/backup", tags=["System"])
+def backup_database():
+    """Creates a timestamped backup copy of aurawork.db."""
+    backup_file = db.create_backup()
+    if not backup_file:
+        raise HTTPException(status_code=400, detail="Database file not found to backup")
+    return {"success": True, "backup_file": backup_file}
+
 
 
 # --- Tasks Endpoints (SQLite) ---
@@ -225,18 +240,32 @@ def revert_audit_entry(log_id: str):
         raise HTTPException(status_code=400, detail="Invalid log ID or action already reverted")
 
     params = target["parameters"]
+    action_type = params.get("type")
 
     # Revert database states based on action type
-    if params.get("type") == "TASK_TIER_MOVE":
+    if action_type == "TASK_TIER_MOVE":
         db.update_task(params["taskId"], {"tier": params["fromTier"]})
-    elif params.get("type") == "BATCH_TIER_MOVE":
+    elif action_type == "BATCH_TIER_MOVE":
         for tid in params.get("taskIds", []):
             db.update_task(tid, {"tier": params["fromTier"]})
-    elif params.get("type") == "RULE_ADDED":
+    elif action_type == "RULE_ADDED":
         db.delete_rule(params["ruleId"])
+    elif action_type == "SCHEDULE_SLOT":
+        db.update_task(params["taskId"], {"scheduled_slot_id": None})
+    elif action_type == "BATCH_SCHEDULE":
+        for d in params.get("scheduledDetails", []):
+            db.update_task(d["taskId"], {"scheduled_slot_id": None})
+    elif action_type == "OUTLOOK_BULK_ARCHIVE":
+        # Restore archived messages back to inbox
+        mail_ids = params.get("mailIds", [])
+        if mail_ids:
+            mapi_service.restore_messages_to_inbox(mail_ids)
+    elif action_type == "TASK_CREATED":
+        db.delete_task(params["taskId"])
 
     db.update_audit_status(log_id, "reverted")
     return {"success": True, "id": log_id, "status": "reverted"}
+
 
 
 # --- Outlook MAPI Endpoints ---

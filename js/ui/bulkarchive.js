@@ -5,6 +5,7 @@
 import { state, saveState } from "../state.js";
 import { apiRequest } from "../api.js";
 import { showToast, escapeHtml } from "./toast.js";
+import { logAiAction } from "../ai-engine.js";
 
 export function renderBulkArchiveCockpit() {
   const container = document.getElementById("bulkProposalsList");
@@ -84,7 +85,7 @@ export function toggleArchiveBatchSelection(batchId) {
   renderBulkArchiveCockpit();
 }
 
-export function executeBulkArchive() {
+export async function executeBulkArchive() {
   const selectedBatches = state.archiveBatches.filter(b => b.selected);
   if (selectedBatches.length === 0) {
     showToast("Please select at least one proposal batch to archive.");
@@ -106,15 +107,13 @@ export function executeBulkArchive() {
   // Sync to Outlook archive endpoint
   apiRequest("/api/outlook/archive", "POST", { entry_ids: allArchivedMailIds });
 
-  if (window.aurawork.logAiAction) {
-    window.aurawork.logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
-      type: "OUTLOOK_BULK_ARCHIVE",
-      mailIds: allArchivedMailIds,
-      batches: selectedBatches,
-      previousFolder: "Inbox",
-      targetFolder: "Archive"
-    });
-  }
+  await logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
+    type: "OUTLOOK_BULK_ARCHIVE",
+    mailIds: allArchivedMailIds,
+    batches: selectedBatches,
+    previousFolder: "Inbox",
+    targetFolder: "Archive"
+  });
 
   saveState();
   renderBulkArchiveCockpit();

@@ -21,8 +21,23 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-def init_db(force_reset: bool = False):
-    """Creates schema and seeds initial data if empty."""
+import shutil
+from datetime import datetime
+
+
+def create_backup() -> Optional[str]:
+    """Creates a timestamped backup copy of aurawork.db in the data directory."""
+    if not os.path.exists(DB_PATH):
+        return None
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"aurawork_backup_{timestamp}.db"
+    backup_path = os.path.join(DB_DIR, backup_filename)
+    shutil.copy2(DB_PATH, backup_path)
+    return backup_filename
+
+
+def init_db(force_reset: bool = False, seed_dummy: bool = True):
+    """Creates schema and seeds initial data if empty and requested."""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -82,12 +97,41 @@ def init_db(force_reset: bool = False):
     """)
     conn.commit()
 
-    # Check if empty, seed initial data
-    cursor.execute("SELECT COUNT(*) FROM tasks")
-    if cursor.fetchone()[0] == 0:
-        _seed_initial_data(conn)
+    # Check if empty, seed initial data only if seed_dummy is True
+    if seed_dummy:
+        cursor.execute("SELECT COUNT(*) FROM tasks")
+        if cursor.fetchone()[0] == 0:
+            _seed_initial_data(conn)
 
     conn.close()
+
+
+def clear_all_data(create_backup_first: bool = True) -> Dict[str, Any]:
+    """
+    Cleans the database for a fresh productive start.
+    Creates a backup copy first to prevent data loss.
+    """
+    backup_file = None
+    if create_backup_first:
+        backup_file = create_backup()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executescript("""
+        DELETE FROM tasks;
+        DELETE FROM followups;
+        DELETE FROM audit_log;
+        DELETE FROM ai_memory_rules;
+    """)
+    conn.commit()
+    conn.close()
+    return {
+        "success": True,
+        "backup_created": backup_file is not None,
+        "backup_file": backup_file,
+        "message": f"Database cleared for production. Backup saved as {backup_file}" if backup_file else "Database cleared."
+    }
+
 
 
 def _seed_initial_data(conn: sqlite3.Connection):

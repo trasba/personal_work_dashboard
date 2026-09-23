@@ -6,7 +6,7 @@ import { state, saveState } from "./state.js";
 import { apiRequest } from "./api.js";
 import { showToast } from "./ui/toast.js";
 
-export function logAiAction(actionType, summary, parameters) {
+export async function logAiAction(actionType, summary, parameters) {
   const now = new Date();
   const timeStr = `Today, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -23,7 +23,7 @@ export function logAiAction(actionType, summary, parameters) {
   state.auditLog.unshift(entry);
 
   // Sync log action to SQLite
-  apiRequest("/api/audit", "POST", {
+  await apiRequest("/api/audit", "POST", {
     id: entry.id,
     timestamp: entry.timestamp,
     action_type: entry.actionType,

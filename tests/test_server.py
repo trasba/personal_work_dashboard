@@ -138,3 +138,28 @@ def test_outlook_endpoints_with_sqlite():
     assert inbox_res.status_code == 200
     cal_res = client.get("/api/outlook/calendar?days=3")
     assert cal_res.status_code == 200
+
+def test_database_backup_and_clean():
+    """Verify clean_database wipes data and creates backup file."""
+    # Ensure some tasks exist
+    client.post("/api/database/reset")
+    pre_tasks = client.get("/api/tasks").json()
+    assert len(pre_tasks) > 0
+
+    # Execute clean
+    clean_res = client.post("/api/database/clean")
+    assert clean_res.status_code == 200
+    clean_data = clean_res.json()
+    assert clean_data["success"] is True
+    assert clean_data["backup_created"] is True
+    assert clean_data["backup_file"].startswith("aurawork_backup_")
+
+    # Verify tasks are empty
+    post_tasks = client.get("/api/tasks").json()
+    assert len(post_tasks) == 0
+
+    # Restore seeds for other tests
+    reset_res = client.post("/api/database/reset")
+    assert reset_res.status_code == 200
+    assert len(client.get("/api/tasks").json()) > 0
+

@@ -415,3 +415,18 @@ export function resetLocalState() {
   state.auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT_LOG));
   saveState();
 }
+
+export function clearLocalState() {
+  state.tasks = [];
+  state.followups = [];
+  state.scheduleSlots = state.scheduleSlots.map(s => {
+    if (s.type === "focus" && !s.locked) {
+      return { ...s, type: "open", title: "Available Focus Gap", taskId: null };
+    }
+    return s;
+  });
+  state.learnedRules = [];
+  state.auditLog = [];
+  saveState();
+}
+

@@ -34,13 +34,9 @@
         <button class="nav-item" data-view="inventory" id="nav-inventory">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           <span>Task Inventory</span>
-          <span class="badge-count" id="totalTasksBadge">14</span>
+          <span class="badge-count" id="totalTasksBadge">0</span>
         </button>
-        <button class="nav-item" data-view="followups" id="nav-followups">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M16 8l4-4M20 4v4h-4"/></svg>
-          <span>Waiting & Follow-ups</span>
-          <span class="badge-count badge-warning" id="waitingBadge">3</span>
-        </button>
+        <!-- Follow-ups omitted for initial productive version (preserved in codebase) -->
         <button class="nav-item" data-view="mailfeed" id="nav-mailfeed">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           <span>AI Mail Feed</span>
@@ -49,7 +45,7 @@
         <button class="nav-item" data-view="auditlog" id="nav-auditlog">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           <span>AI Action & Audit Log</span>
-          <span class="badge-count" id="auditLogCountBadge">2</span>
+          <span class="badge-count" id="auditLogCountBadge">0</span>
         </button>
       </nav>
 
@@ -57,8 +53,8 @@
         <div class="section-label">CONNECTED SOURCES</div>
         <div class="integration-pill online">
           <span class="dot"></span>
-          <span class="int-name">Google Calendar</span>
-          <span class="int-status">Live</span>
+          <span class="int-name">Outlook Calendar</span>
+          <span class="int-status">Active</span>
         </div>
         <div class="integration-pill online">
           <span class="dot"></span>
@@ -98,26 +94,47 @@
             <span class="metric-title">PLANNED LOAD</span>
             <div class="metric-bar-wrap">
               <div class="metric-bar">
-                <div class="metric-bar-fill" id="capacityFill" style="width: 72%;"></div>
+                <div class="metric-bar-fill" id="capacityFill" style="width: 0%;"></div>
               </div>
-              <span class="metric-val" id="capacityText">2.7h / 7h</span>
+              <span class="metric-val" id="capacityText">0h / 7h</span>
             </div>
           </div>
           <div class="metric-card focus-tag">
             <span class="metric-title">FOCUS CAPACITY</span>
-            <span class="metric-val-highlight" id="freeSlotsCount">3.0 hrs open</span>
+            <span class="metric-val-highlight" id="freeSlotsCount">--</span>
           </div>
         </div>
 
         <div class="top-actions">
+          <button class="btn btn-primary" id="openCreateTaskModalBtn" title="Create a new task">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>New Task</span>
+          </button>
           <button class="btn btn-magic" id="autoScheduleBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             <span>Auto-Structure Day</span>
           </button>
-          <button class="btn btn-secondary" id="resetDataBtn" title="Reset sample dummy data">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-            <span>Reset Demo</span>
-          </button>
+          <div class="settings-dropdown-wrapper">
+            <button class="btn btn-secondary" id="dbSettingsBtn" title="Database & Settings">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Settings</span>
+            </button>
+            <div class="settings-dropdown-menu" id="settingsDropdownMenu" style="display: none;">
+              <button class="dropdown-item danger" id="cleanDbOptionBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Clear All Data (Auto-Backup)</span>
+              </button>
+              <button class="dropdown-item" id="createBackupOptionBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>Create Database Backup</span>
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="loadDemoDataBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                <span>Load Sample Demo Data</span>
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -269,6 +286,10 @@
             <p class="view-subheading">Organize and manage your complete backlog. The AI automatically classifies and suggests high-impact tasks to promote.</p>
           </div>
           <div class="inventory-actions">
+            <button class="btn btn-primary" onclick="window.aurawork.openTaskModal('today')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Task</span>
+            </button>
             <button class="btn btn-magic" onclick="runAiAutoTriage()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               <span>AI Re-Triage Backlog</span>
@@ -456,6 +477,90 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Task Creation Modal -->
+  <div class="modal-backdrop" id="taskModalBackdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="sparkle-icon">✦</span>
+          <h3 class="modal-title">Create New Task</h3>
+        </div>
+        <button class="modal-close-btn" id="closeTaskModalBtn" title="Close">✕</button>
+      </div>
+      <form id="createTaskForm" class="modal-body">
+        <div class="form-group">
+          <label for="taskTitleInput" class="form-label">Task Description / Title</label>
+          <input type="text" id="taskTitleInput" class="form-input" placeholder="e.g. Prepare executive strategy slides" required autofocus autocomplete="off">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="taskPrioritySelect" class="form-label">Priority</label>
+            <select id="taskPrioritySelect" class="form-select">
+              <option value="high">High Priority</option>
+              <option value="medium" selected>Medium Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="taskDurationInput" class="form-label">Estimated Duration</label>
+            <select id="taskDurationSelect" class="form-select">
+              <option value="15">15 minutes</option>
+              <option value="30" selected>30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60">60 minutes (1h)</option>
+              <option value="90">90 minutes (1.5h)</option>
+              <option value="120">120 minutes (2h)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="taskCategoryInput" class="form-label">Category / Project</label>
+            <input type="text" id="taskCategoryInput" class="form-input" placeholder="e.g. Product, Strategic, Ops" value="General">
+          </div>
+          <div class="form-group">
+            <label for="taskTierSelect" class="form-label">Bucket / Tier</label>
+            <select id="taskTierSelect" class="form-select">
+              <option value="today" selected>Tier 1: Today's Focus</option>
+              <option value="upcoming">Tier 2: Up Next (This Week)</option>
+              <option value="backlog">Tier 3: Project Backlog</option>
+              <option value="someday">Tier 4: Someday / Icebox</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelTaskModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveTaskModalBtn">Create Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Database Wipe / Clean Confirmation Modal -->
+  <div class="modal-backdrop" id="cleanDbModalBackdrop" style="display: none;">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span style="font-size: 1.2rem;">🛡️</span>
+          <h3 class="modal-title">Clear All Data (Clean Slate)</h3>
+        </div>
+        <button class="modal-close-btn" id="closeCleanDbModalBtn" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+          This will wipe all existing tasks, demo records, and logs to give you a pristine, productive workspace.
+        </p>
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 0.8rem; color: var(--color-success); margin-bottom: 16px;">
+          ✓ An automatic timestamped backup of your current database will be saved in <code>data/</code> before clearing.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelCleanDbBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmCleanDbBtn">Backup & Clear Everything</button>
+      </div>
+    </div>
   </div>
 
   <!-- Toast Notification -->
