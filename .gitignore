@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build and test outputs
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+dashboard-preview.png
+
+# Environment and local state
+.env
+.env.local
+.DS_Store
+Thumbs.db
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary / Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuraWork AI — Daily Work & Focus Dashboard</title>
+  <meta name="description" content="AI-powered executive daily work dashboard, calendar time-blocking, task structuring, and mailbox smart assistant.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">AuraWork</span>
+          <span class="brand-badge">AI COPILOT</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-view="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>Day Flow</span>
+        </button>
+        <button class="nav-item" data-view="inbox">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span>AI Mail Feed</span>
+          <span class="badge-count" id="inboxBadge">3</span>
+        </button>
+        <button class="nav-item" data-view="timeline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Time Blocks</span>
+        </button>
+        <button class="nav-item" data-view="analytics">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+          <span>Capacity & Energy</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-integrations">
+        <div class="section-label">CONNECTED SOURCES</div>
+        <div class="integration-pill online">
+          <span class="dot"></span>
+          <span class="int-name">Google Calendar</span>
+          <span class="int-status">Live</span>
+        </div>
+        <div class="integration-pill online">
+          <span class="dot"></span>
+          <span class="int-name">Outlook Mailbox</span>
+          <span class="int-status">Active</span>
+        </div>
+        <div class="integration-pill online">
+          <span class="dot"></span>
+          <span class="int-name">Slack Mentions</span>
+          <span class="int-status">Syncing</span>
+        </div>
+      </div>
+
+      <div class="user-profile">
+        <div class="avatar">Alex</div>
+        <div class="user-meta">
+          <span class="user-name">Alex Miller</span>
+          <span class="user-role">Head of Product</span>
+        </div>
+        <button class="theme-toggle" id="themeToggleBtn" title="Toggle Theme">
+          <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-viewport">
+      <!-- Top Bar: Clock, Date, Capacity Bar, Auto Structure -->
+      <header class="top-nav">
+        <div class="greeting-box">
+          <h1 class="greeting-title" id="greetingTitle">Good afternoon, Alex</h1>
+          <p class="greeting-subtitle" id="currentDateDisplay">Wednesday, September 23 • AI Schedule Optimizing</p>
+        </div>
+
+        <div class="top-metrics">
+          <div class="metric-card">
+            <span class="metric-title">PLANNED LOAD</span>
+            <div class="metric-bar-wrap">
+              <div class="metric-bar">
+                <div class="metric-bar-fill" id="capacityFill" style="width: 72%;"></div>
+              </div>
+              <span class="metric-val" id="capacityText">5.5h / 7.5h</span>
+            </div>
+          </div>
+          <div class="metric-card focus-tag">
+            <span class="metric-title">FOCUS CAPACITY</span>
+            <span class="metric-val-highlight" id="freeSlotsCount">3.0 hrs open</span>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <button class="btn btn-magic" id="autoScheduleBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span>Auto-Structure Day</span>
+          </button>
+          <button class="btn btn-secondary" id="resetDataBtn" title="Reset sample dummy data">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            <span>Reset Demo</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- AI Smart Briefing & Nudges Banner -->
+      <section class="ai-briefing-card" id="aiBriefingBanner">
+        <div class="ai-avatar-pulse">
+          <div class="spark-core">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M4.93 19.07l14.14-14.14"/></svg>
+          </div>
+        </div>
+        <div class="ai-briefing-body">
+          <div class="ai-briefing-header">
+            <span class="ai-tag">AI WORKDAY NUDGE</span>
+            <span class="ai-time">Calculated 4m ago</span>
+          </div>
+          <p class="ai-briefing-text" id="aiNudgeText">
+            You have <strong>3 meetings (2.5 hrs)</strong> today. You're carrying <strong>2 high-priority deliverables</strong> due by 5 PM. I recommend blocking the <strong>1:30 PM - 3:00 PM</strong> open gap for the <em>Q3 Board Deck review</em> before your 3:30 PM team sprint sync.
+          </p>
+          <div class="ai-nudge-actions" id="nudgeActionChips">
+            <button class="chip chip-action" id="applyNudgeScheduleBtn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Apply Recommended Time-Block
+            </button>
+            <button class="chip chip-action" id="deferLowPriorityBtn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Push 1 Low-Priority to Tomorrow
+            </button>
+            <button class="chip chip-ghost" id="dismissNudgeBtn">Dismiss</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Central Workspace Grid -->
+      <div class="dashboard-grid">
+        <!-- LEFT COLUMN: Tasks, AI Quick Add, Smart Queues -->
+        <section class="panel tasks-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <h2 class="panel-title">Tasks & Workload</h2>
+              <span class="counter-badge" id="activeTaskCount">4 active</span>
+            </div>
+            <div class="tab-pills" id="taskCategoryTabs">
+              <button class="tab-pill active" data-tab="today">Today's Focus</button>
+              <button class="tab-pill" data-tab="upcoming">Upcoming</button>
+              <button class="tab-pill" data-tab="all">All</button>
+              <button class="tab-pill" data-tab="done">Completed</button>
+            </div>
+          </div>
+
+          <!-- Natural Language Quick-Add Bar -->
+          <div class="quick-add-box">
+            <div class="quick-add-input-wrap">
+              <div class="input-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <input 
+                type="text" 
+                id="quickAddInput" 
+                class="quick-add-input" 
+                placeholder="Quick add with AI e.g., 'Draft contract 45m high priority tomorrow' or 'Review budget 30m'"
+                autocomplete="off"
+              >
+              <button class="btn btn-primary btn-sm" id="quickAddSubmitBtn">
+                <span>Add Task</span>
+                <kbd class="shortcut-kbd">↵</kbd>
+              </button>
+            </div>
+            <div class="quick-add-parsed-preview" id="nlpParsedPreview" style="display: none;">
+              <span class="preview-label">AI Extracted:</span>
+              <span class="tag-pill" id="previewTitle">Task</span>
+              <span class="tag-pill tag-duration" id="previewDuration">30m</span>
+              <span class="tag-pill tag-priority" id="previewPriority">Medium</span>
+              <span class="tag-pill tag-due" id="previewDue">Today</span>
+            </div>
+          </div>
+
+          <!-- Task List Container -->
+          <div class="task-list" id="taskListContainer">
+            <!-- Dynamic task items injected by app.js -->
+          </div>
+
+          <!-- AI Extracted from Mail/Calendar Quick Actions Panel -->
+          <div class="inbox-digest-card">
+            <div class="digest-header">
+              <div class="digest-title-box">
+                <span class="sparkle-icon">✦</span>
+                <span class="digest-title">Discovered from Inbound Emails</span>
+              </div>
+              <span class="digest-badge">2 Pending Action</span>
+            </div>
+            <div class="digest-items" id="digestItemsContainer">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT COLUMN: Daily Timeline & Smart Time Blocks -->
+        <section class="panel timeline-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <h2 class="panel-title">Today's Schedule & Time Blocks</h2>
+              <span class="schedule-status-tag" id="scheduleStatusTag">Optimized by AI</span>
+            </div>
+            <div class="timeline-controls">
+              <span class="time-range-text">8:00 AM – 6:00 PM</span>
+              <button class="icon-btn" id="nowJumpBtn" title="Scroll to current time">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Now</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Visual Distribution bar -->
+          <div class="schedule-legend">
+            <div class="legend-item"><span class="legend-dot meeting"></span> Meetings (2.5h)</div>
+            <div class="legend-item"><span class="legend-dot focus"></span> AI Focus Blocks (3.0h)</div>
+            <div class="legend-item"><span class="legend-dot open"></span> Free Gaps (2.5h)</div>
+          </div>
+
+          <!-- Hour-by-hour timeline -->
+          <div class="timeline-scroll-area" id="timelineScrollArea">
+            <div class="timeline-grid" id="timelineSlots">
+              <!-- Rendered hourly blocks with calendar events & task blocks -->
+            </div>
+          </div>
+
+          <!-- Daily Completion Summary Footer -->
+          <div class="day-stats-footer">
+            <div class="stat-bubble">
+              <span class="stat-number" id="statsCompletedCount">0/4</span>
+              <span class="stat-desc">Tasks Finished</span>
+            </div>
+            <div class="stat-bubble">
+              <span class="stat-number">2h 15m</span>
+              <span class="stat-desc">Deep Work Done</span>
+            </div>
+            <div class="stat-bubble">
+              <span class="stat-number text-success">Healthy</span>
+              <span class="stat-desc">Pace Score</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-hub" id="toastHub"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
