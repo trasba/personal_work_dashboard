@@ -395,12 +395,162 @@ let archiveBatches = JSON.parse(localStorage.getItem("aurawork_v4_archive_batche
 let learnedRules = JSON.parse(localStorage.getItem("aurawork_v4_learned_rules")) || INITIAL_LEARNED_RULES;
 let auditLog = JSON.parse(localStorage.getItem("aurawork_v4_audit_log")) || INITIAL_AUDIT_LOG;
 let currentView = "dayflow";
+let calendarDaysAhead = 1;
+let isBackendConnected = false;
+
+// API Helper Client for SQLite Synchronization
+const API_BASE = window.location.origin;
+
+async function apiRequest(endpoint, method = "GET", body = null) {
+  try {
+    const options = {
+      method,
+      headers: { "Content-Type": "application/json" }
+    };
+    if (body) options.body = JSON.stringify(body);
+    const res = await fetch(`${API_BASE}${endpoint}`, options);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`[AuraWork Sync] API error on ${method} ${endpoint}:`, err.message);
+    return null;
+  }
+}
+
+async function fetchFromBackend() {
+  const statusEl = document.getElementById("dbSyncStatus");
+  try {
+    const health = await apiRequest("/api/health");
+    if (!health) {
+      if (statusEl) {
+        statusEl.textContent = "Offline (Local)";
+        statusEl.style.color = "#f59e0b";
+      }
+      return;
+    }
+
+    isBackendConnected = true;
+    if (statusEl) {
+      statusEl.textContent = "SQLite Live";
+      statusEl.style.color = "#34d399";
+    }
+
+    // 1. Fetch Tasks
+    const dbTasks = await apiRequest("/api/tasks");
+    if (Array.isArray(dbTasks) && dbTasks.length > 0) {
+      tasks = dbTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        duration: t.duration,
+        priority: t.priority,
+        tier: t.tier,
+        category: t.category,
+        completed: Boolean(t.completed),
+        scheduledSlotId: t.scheduled_slot_id,
+        source: t.source
+      }));
+    }
+
+    // 2. Fetch Rules
+    const dbRules = await apiRequest("/api/rules");
+    if (Array.isArray(dbRules) && dbRules.length > 0) {
+      learnedRules = dbRules.map(r => ({
+        id: r.id,
+        type: r.rule_type,
+        value: r.pattern_value,
+        label: r.label,
+        count: r.times_applied
+      }));
+    }
+
+    // 3. Fetch Followups
+    const dbFollowups = await apiRequest("/api/followups");
+    if (Array.isArray(dbFollowups) && dbFollowups.length > 0) {
+      followups = dbFollowups.map(f => ({
+        id: f.id,
+        person: f.person,
+        topic: f.topic,
+        channel: f.channel,
+        sentDate: f.sent_date,
+        expectedDate: f.expected_date,
+        status: f.status,
+        urgencyText: f.urgency_text || ""
+      }));
+    }
+
+    // 4. Fetch Audit Logs
+    const dbAudit = await apiRequest("/api/audit");
+    if (Array.isArray(dbAudit) && dbAudit.length > 0) {
+      auditLog = dbAudit.map(a => ({
+        id: a.id,
+        timestamp: a.timestamp,
+        actionType: a.action_type,
+        summary: a.summary,
+        revertable: Boolean(a.revertable),
+        status: a.status,
+        parameters: a.parameters || {}
+      }));
+    }
+
+    // 5. Fetch Outlook Calendar for Timeline
+    await fetchOutlookCalendar(calendarDaysAhead);
+
+    saveState();
+    renderAll();
+  } catch (err) {
+    console.warn("[AuraWork Sync] Failed loading backend data:", err);
+  }
+}
+
+async function fetchOutlookCalendar(days = 1) {
+  try {
+    const events = await apiRequest(`/api/outlook/calendar?days=${days}`);
+    if (Array.isArray(events) && events.length > 0) {
+      // Re-map meetings into schedule slots
+      const mappedMeetingSlots = events.map((ev, idx) => {
+        let timeLabel = "9:00 AM";
+        if (ev.start_time.includes("09:00")) timeLabel = "9:00 AM";
+        else if (ev.start_time.includes("09:30")) timeLabel = "9:30 AM";
+        else if (ev.start_time.includes("10:00")) timeLabel = "10:00 AM";
+        else if (ev.start_time.includes("14:00")) timeLabel = "2:00 PM";
+        else if (ev.start_time.includes("15:30")) timeLabel = "3:30 PM";
+        else timeLabel = `${9 + (idx * 2)}:00 AM`;
+
+        return {
+          id: `slot-mapi-${idx}`,
+          timeLabel: timeLabel,
+          type: ev.is_meeting ? "meeting" : "focus",
+          title: ev.subject,
+          durationText: `${ev.duration_minutes}m`,
+          attendees: ev.location ? `${ev.location} • Outlook MAPI` : "Outlook MAPI Event",
+          locked: true
+        };
+      });
+
+      // Maintain user focus blocks if assigned
+      const existingFocusSlots = scheduleSlots.filter(s => s.type === "focus" && !s.locked);
+      const openGapSlots = [
+        { id: "slot-1100", timeLabel: "11:00 AM", type: "open", title: "Available Focus Gap", durationText: "60m", locked: false },
+        { id: "slot-1200", timeLabel: "12:00 PM", type: "open", title: "Lunch & Recharge Break", durationText: "60m", locked: false },
+        { id: "slot-1430", timeLabel: "2:30 PM", type: "open", title: "Available Focus Gap", durationText: "45m", locked: false },
+        { id: "slot-1630", timeLabel: "4:30 PM", type: "open", title: "End of Day Wrap-up / Open Gap", durationText: "60m", locked: false }
+      ];
+
+      scheduleSlots = [...mappedMeetingSlots, ...existingFocusSlots, ...openGapSlots];
+      renderTimeline();
+      renderMetrics();
+    }
+  } catch (e) {
+    console.warn("[AuraWork] Error loading Outlook calendar:", e);
+  }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   setupGreeting();
   setupNavigation();
   setupEventListeners();
   renderAll();
+  fetchFromBackend();
 });
 
 function setupGreeting() {
@@ -456,7 +606,7 @@ function setupEventListeners() {
   // Reset Demo Data
   const resetBtn = document.getElementById("resetDataBtn");
   if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
+    resetBtn.addEventListener("click", async () => {
       tasks = JSON.parse(JSON.stringify(INITIAL_TASKS));
       followups = JSON.parse(JSON.stringify(INITIAL_FOLLOWUPS));
       scheduleSlots = JSON.parse(JSON.stringify(INITIAL_SCHEDULE_SLOTS));
@@ -464,6 +614,9 @@ function setupEventListeners() {
       archiveBatches = JSON.parse(JSON.stringify(INITIAL_ARCHIVE_BATCHES));
       learnedRules = JSON.parse(JSON.stringify(INITIAL_LEARNED_RULES));
       auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT_LOG));
+      
+      await apiRequest("/api/database/reset", "POST");
+
       saveState();
       renderAll();
       showToast("All sample data & AI memory restored to initial state");
@@ -565,6 +718,31 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Calendar Lookahead Day Selector
+  const calButtons = document.querySelectorAll(".calendar-day-selector .cal-day-btn");
+  calButtons.forEach(btn => {
+    btn.addEventListener("click", async () => {
+      calButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const days = parseInt(btn.dataset.days) || 1;
+      const label = btn.dataset.label;
+      calendarDaysAhead = days;
+
+      const titleEl = document.getElementById("timelineHeaderTitle");
+      if (titleEl) {
+        titleEl.textContent = days === 1 
+          ? "Today's Schedule & Time Blocks" 
+          : days === 2 
+            ? "Tomorrow's Schedule & Time Blocks" 
+            : "Next 5 Workdays Schedule Overview";
+      }
+
+      showToast(`Loading Outlook schedule for ${label}...`);
+      await fetchOutlookCalendar(days);
+      showToast(`Retrieved ${label} calendar from Outlook MAPI`);
+    });
+  });
 }
 
 // NLP Parsing
@@ -627,6 +805,19 @@ function handleQuickAddSubmit() {
   quickInput.value = "";
   if (previewBox) previewBox.style.display = "none";
 
+  // Async sync to SQLite backend
+  apiRequest("/api/tasks", "POST", {
+    id: newTask.id,
+    title: newTask.title,
+    duration: newTask.duration,
+    priority: newTask.priority,
+    tier: newTask.tier,
+    category: newTask.category,
+    completed: newTask.completed,
+    scheduled_slot_id: null,
+    source: newTask.source
+  });
+
   saveState();
   renderAll();
   showToast(`Added to ${parsed.tier === 'today' ? "Today's Focus" : "Up Next"}: "${newTask.title}"`);
@@ -654,6 +845,9 @@ function runAutoSchedulingAI() {
     scheduledCount++;
 
     scheduledDetails.push({ slotId: slot.id, taskId: task.id, title: task.title, time: slot.timeLabel });
+
+    // Sync task scheduled slot
+    apiRequest(`/api/tasks/${task.id}`, "PATCH", { scheduled_slot_id: slot.id });
   }
 
   if (scheduledCount > 0) {
@@ -678,6 +872,7 @@ function runAiAutoTriage() {
       t.tier = "upcoming";
       promoted++;
       promotedIds.push(t.id);
+      apiRequest(`/api/tasks/${t.id}`, "PATCH", { tier: "upcoming" });
     }
   });
 
@@ -711,6 +906,8 @@ function setTaskTier(taskId, newTier) {
   }
 
   task.tier = newTier;
+  apiRequest(`/api/tasks/${task.id}`, "PATCH", { tier: newTier, scheduled_slot_id: task.scheduledSlotId });
+
   logAiAction("TIER_CHANGE", `Moved '${task.title}' from ${oldTier} to ${newTier}`, {
     type: "TASK_TIER_MOVE",
     taskId: task.id,
@@ -737,6 +934,8 @@ function toggleTaskCompletion(taskId) {
     }
   }
 
+  apiRequest(`/api/tasks/${task.id}`, "PATCH", { completed: task.completed });
+
   saveState();
   renderAll();
   showToast(task.completed ? `Finished: "${task.title}"` : `Marked active: "${task.title}"`);
@@ -756,6 +955,8 @@ function deleteTask(taskId) {
   }
 
   tasks = tasks.filter(t => t.id !== taskId);
+  apiRequest(`/api/tasks/${taskId}`, "DELETE");
+
   saveState();
   renderAll();
   showToast("Task removed");
@@ -776,6 +977,8 @@ function quickScheduleTask(taskId) {
   openSlot.taskId = task.id;
   task.scheduledSlotId = openSlot.id;
 
+  apiRequest(`/api/tasks/${task.id}`, "PATCH", { scheduled_slot_id: openSlot.id });
+
   logAiAction("SCHEDULE_BLOCK", `Manually scheduled '${task.title}' into ${openSlot.timeLabel}`, {
     type: "SCHEDULE_SLOT",
     slotId: openSlot.id,
@@ -793,7 +996,10 @@ function unassignSlot(slotId) {
 
   if (slot.taskId) {
     const task = tasks.find(t => t.id === slot.taskId);
-    if (task) task.scheduledSlotId = null;
+    if (task) {
+      task.scheduledSlotId = null;
+      apiRequest(`/api/tasks/${task.id}`, "PATCH", { scheduled_slot_id: null });
+    }
   }
 
   slot.type = "open";
@@ -825,6 +1031,18 @@ function convertEmailToTask(emailId) {
   tasks.unshift(newTask);
   inboundEmails = inboundEmails.filter(e => e.id !== emailId);
 
+  apiRequest("/api/tasks", "POST", {
+    id: newTask.id,
+    title: newTask.title,
+    duration: newTask.duration,
+    priority: newTask.priority,
+    tier: newTask.tier,
+    category: newTask.category,
+    completed: false,
+    scheduled_slot_id: null,
+    source: "email"
+  });
+
   logAiAction("EMAIL_CONVERT", `Extracted task '${newTask.title}' from email '${email.subject}'`, {
     type: "TASK_CREATED",
     taskId: newTask.id,
@@ -855,6 +1073,9 @@ function resolveFollowUp(followupId) {
   if (!item) return;
   item.status = "resolved";
   item.urgencyText = "Resolved just now";
+
+  apiRequest(`/api/followups/${followupId}/resolve`, "PATCH");
+
   saveState();
   renderFollowups();
   showToast(`Marked follow-up with ${item.person} as resolved!`);
@@ -878,6 +1099,18 @@ function promptAddFollowUp() {
   };
 
   followups.unshift(newItem);
+
+  apiRequest("/api/followups", "POST", {
+    id: newItem.id,
+    person: newItem.person,
+    topic: newItem.topic,
+    channel: newItem.channel,
+    sent_date: newItem.sentDate,
+    expected_date: newItem.expectedDate,
+    status: newItem.status,
+    urgency_text: newItem.urgencyText
+  });
+
   saveState();
   renderFollowups();
   showToast(`Added follow-up tracking for ${person}`);
@@ -912,6 +1145,9 @@ function executeBulkArchive() {
   });
 
   archiveBatches = archiveBatches.filter(b => !b.selected);
+
+  // Sync to Outlook archive endpoint
+  apiRequest("/api/outlook/archive", "POST", { entry_ids: allArchivedMailIds });
 
   logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
     type: "OUTLOOK_BULK_ARCHIVE",
@@ -955,9 +1191,17 @@ function teachAiCleanUpRule(batchId, ruleType) {
   }
 
   if (newRule) {
-    // Avoid duplicate rules
     if (!learnedRules.some(r => r.label === newRule.label)) {
       learnedRules.push(newRule);
+
+      // Async sync to SQLite rules
+      apiRequest("/api/rules", "POST", {
+        id: newRule.id,
+        rule_type: newRule.type,
+        pattern_value: newRule.value,
+        label: newRule.label,
+        times_applied: newRule.count
+      });
 
       // Log AI memory update into audit log
       logAiAction("MEMORY_LEARN_RULE", `User trained AI rule: Always propose archiving ${newRule.label}`, {
@@ -997,6 +1241,14 @@ function teachEmailCleanUp(emailId, ruleType) {
   learnedRules.push(newRule);
   inboundEmails = inboundEmails.filter(e => e.id !== emailId);
 
+  apiRequest("/api/rules", "POST", {
+    id: newRule.id,
+    rule_type: newRule.type,
+    pattern_value: newRule.value,
+    label: newRule.label,
+    times_applied: 1
+  });
+
   logAiAction("MEMORY_LEARN_RULE", `Trained clean-up memory on ${ruleLabel} and archived email`, {
     type: "RULE_ADDED",
     ruleId: newRule.id,
@@ -1011,6 +1263,9 @@ function teachEmailCleanUp(emailId, ruleType) {
 function removeLearnedRule(ruleId) {
   const rule = learnedRules.find(r => r.id === ruleId);
   learnedRules = learnedRules.filter(r => r.id !== ruleId);
+
+  apiRequest(`/api/rules/${ruleId}`, "DELETE");
+
   saveState();
   renderBulkArchiveCockpit();
   showToast(`Removed rule: ${rule?.label || 'Rule'}`);
@@ -1034,6 +1289,18 @@ function logAiAction(actionType, summary, parameters) {
   };
 
   auditLog.unshift(entry);
+
+  // Sync log action to SQLite
+  apiRequest("/api/audit", "POST", {
+    id: entry.id,
+    timestamp: entry.timestamp,
+    action_type: entry.actionType,
+    summary: entry.summary,
+    revertable: entry.revertable,
+    status: entry.status,
+    parameters: entry.parameters
+  });
+
   return entry;
 }
 
@@ -1047,6 +1314,8 @@ function revertAiAction(logId) {
     if (params.batches) {
       params.batches.forEach(b => archiveBatches.push(b));
     }
+    // Call Outlook restore endpoint
+    apiRequest("/api/outlook/restore", "POST", { entry_ids: params.mailIds });
     entry.status = "reverted";
     showToast(`Undo successful: Moved ${params.mailIds.length} emails back to Outlook Inbox!`);
   } else if (params.type === "BATCH_SCHEDULE") {
@@ -1058,7 +1327,10 @@ function revertAiAction(logId) {
         slot.taskId = null;
       }
       const task = tasks.find(t => t.id === d.taskId);
-      if (task) task.scheduledSlotId = null;
+      if (task) {
+        task.scheduledSlotId = null;
+        apiRequest(`/api/tasks/${task.id}`, "PATCH", { scheduled_slot_id: null });
+      }
     });
     entry.status = "reverted";
     showToast(`Undo successful: Cleared auto-scheduled focus blocks from timeline.`);
@@ -1070,26 +1342,39 @@ function revertAiAction(logId) {
       slot.taskId = null;
     }
     const task = tasks.find(t => t.id === params.taskId);
-    if (task) task.scheduledSlotId = null;
+    if (task) {
+      task.scheduledSlotId = null;
+      apiRequest(`/api/tasks/${task.id}`, "PATCH", { scheduled_slot_id: null });
+    }
     entry.status = "reverted";
     showToast("Reverted scheduled time block.");
   } else if (params.type === "TASK_TIER_MOVE") {
     const task = tasks.find(t => t.id === params.taskId);
-    if (task) task.tier = params.fromTier;
+    if (task) {
+      task.tier = params.fromTier;
+      apiRequest(`/api/tasks/${task.id}`, "PATCH", { tier: params.fromTier });
+    }
     entry.status = "reverted";
     showToast(`Reverted '${task?.title || 'task'}' back to ${params.fromTier}.`);
   } else if (params.type === "BATCH_TIER_MOVE") {
     params.taskIds.forEach(id => {
       const task = tasks.find(t => t.id === id);
-      if (task) task.tier = params.fromTier;
+      if (task) {
+        task.tier = params.fromTier;
+        apiRequest(`/api/tasks/${task.id}`, "PATCH", { tier: params.fromTier });
+      }
     });
     entry.status = "reverted";
     showToast(`Reverted ${params.taskIds.length} tasks back to ${params.fromTier}.`);
   } else if (params.type === "RULE_ADDED") {
     learnedRules = learnedRules.filter(r => r.id !== params.ruleId);
+    apiRequest(`/api/rules/${params.ruleId}`, "DELETE");
     entry.status = "reverted";
     showToast("Reverted learned clean-up memory rule.");
   }
+
+  // Sync revert status to SQLite
+  apiRequest(`/api/audit/${logId}/revert`, "PATCH");
 
   saveState();
   renderAll();

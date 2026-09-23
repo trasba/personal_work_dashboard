@@ -66,9 +66,9 @@
           <span class="int-status">Active</span>
         </div>
         <div class="integration-pill online">
-          <span class="dot"></span>
-          <span class="int-name">Slack Mentions</span>
-          <span class="int-status">Syncing</span>
+          <span class="dot" style="background: #818cf8; box-shadow: 0 0 6px rgba(129, 140, 248, 0.6);"></span>
+          <span class="int-name">SQLite Storage</span>
+          <span class="int-status" id="dbSyncStatus">Connected</span>
         </div>
       </div>
 
@@ -212,11 +212,16 @@
           <div class="panel timeline-panel">
             <div class="panel-header">
               <div class="panel-title-wrap">
-                <h2 class="panel-title">Today's Schedule & Time Blocks</h2>
+                <h2 class="panel-title" id="timelineHeaderTitle">Today's Schedule & Time Blocks</h2>
                 <span class="schedule-status-tag" id="scheduleStatusTag">Optimized by AI</span>
               </div>
               <div class="timeline-controls">
-                <span class="time-range-text">8:00 AM – 6:00 PM</span>
+                <div class="calendar-day-selector" id="calendarDaySelector">
+                  <button class="cal-day-btn active" data-days="1" data-label="Today">Today</button>
+                  <button class="cal-day-btn" data-days="2" data-label="Tomorrow">Tomorrow</button>
+                  <button class="cal-day-btn" data-days="5" data-label="Next 5 Days">5-Day Week</button>
+                </div>
+                <span class="time-range-text" id="timelineRangeText">8:00 AM – 6:00 PM</span>
                 <button class="icon-btn" id="nowJumpBtn" title="Scroll to current time">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   <span>Now</span>

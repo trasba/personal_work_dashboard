@@ -18,6 +18,9 @@ dashboard-preview.png
 .env.local
 .DS_Store
 Thumbs.db
+data/*.db
+*.sqlite3
+
 
 # IDE and editor settings
 .vscode/
