@@ -1,16 +1,15 @@
 /**
- * AuraWork AI — Interactive Multi-View Controller & State Store
+ * AuraWork AI — Interactive Multi-View Controller, Bulk Archive & Audit Log Store
  */
 
 // Initial Seed Tasks spanning 4 Tiers
 const INITIAL_TASKS = [
-  // TIER 1: Today's Focus (Max 4-5)
   {
     id: "task-1",
     title: "Finalize Q3 Board Performance Deck",
     duration: 60,
     priority: "high",
-    tier: "today", // 'today', 'upcoming', 'backlog', 'someday'
+    tier: "today",
     category: "Strategic",
     completed: false,
     scheduledSlotId: "slot-1330",
@@ -49,8 +48,6 @@ const INITIAL_TASKS = [
     scheduledSlotId: null,
     source: "manual"
   },
-
-  // TIER 2: Up Next / This Week
   {
     id: "task-5",
     title: "Audit cloud infrastructure cost report for August",
@@ -95,8 +92,6 @@ const INITIAL_TASKS = [
     scheduledSlotId: null,
     source: "manual"
   },
-
-  // TIER 3: Project Backlog
   {
     id: "task-9",
     title: "Consolidate Q4 team hiring plan & headcounts",
@@ -141,8 +136,6 @@ const INITIAL_TASKS = [
     scheduledSlotId: null,
     source: "manual"
   },
-
-  // TIER 4: Someday / Icebox
   {
     id: "task-13",
     title: "Explore migrating API documentation to interactive playground",
@@ -167,7 +160,7 @@ const INITIAL_TASKS = [
   }
 ];
 
-// Initial Seed Follow-up Records ("Waiting For")
+// Initial Seed Follow-up Records
 const INITIAL_FOLLOWUPS = [
   {
     id: "follow-1",
@@ -176,7 +169,7 @@ const INITIAL_FOLLOWUPS = [
     channel: "Outlook Email",
     sentDate: "Sep 20 (3d ago)",
     expectedDate: "Sep 22",
-    status: "overdue", // 'overdue', 'waiting', 'resolved'
+    status: "overdue",
     urgencyText: "Overdue by 1 day"
   },
   {
@@ -327,11 +320,73 @@ const INITIAL_INBOUND_EMAILS = [
   }
 ];
 
-// App State
-let tasks = JSON.parse(localStorage.getItem("aurawork_v2_tasks")) || INITIAL_TASKS;
-let followups = JSON.parse(localStorage.getItem("aurawork_v2_followups")) || INITIAL_FOLLOWUPS;
-let scheduleSlots = JSON.parse(localStorage.getItem("aurawork_v2_slots")) || INITIAL_SCHEDULE_SLOTS;
-let inboundEmails = JSON.parse(localStorage.getItem("aurawork_v2_emails")) || INITIAL_INBOUND_EMAILS;
+// Proposed Bulk Archive Batches
+const INITIAL_ARCHIVE_BATCHES = [
+  {
+    id: "batch-rsvp",
+    title: "Calendar Meeting RSVPs & Acceptances",
+    count: 8,
+    sampleSubjects: "Accepted: Product Roadmap • Accepted: Sprint Retrospective • Accepted: 1-on-1 with Mark",
+    selected: true,
+    mailIds: ["msg-rsvp-1", "msg-rsvp-2", "msg-rsvp-3", "msg-rsvp-4", "msg-rsvp-5", "msg-rsvp-6", "msg-rsvp-7", "msg-rsvp-8"]
+  },
+  {
+    id: "batch-alerts",
+    title: "Automated Jira & CI/CD Pipeline Notifications",
+    count: 5,
+    sampleSubjects: "[BUILD SUCCESS] staging-us-east #412 • [JIRA] PROD-882 closed by Marcus",
+    selected: true,
+    mailIds: ["msg-alert-1", "msg-alert-2", "msg-alert-3", "msg-alert-4", "msg-alert-5"]
+  },
+  {
+    id: "batch-marketing",
+    title: "Vendor Newsletters & Webinar Invitations",
+    count: 3,
+    sampleSubjects: "Gartner Magic Quadrant update • AWS Summit Pass registration",
+    selected: true,
+    mailIds: ["msg-news-1", "msg-news-2", "msg-news-3"]
+  }
+];
+
+// Immutable AI Action Audit Log with Revert Parameters
+const INITIAL_AUDIT_LOG = [
+  {
+    id: "log-1",
+    timestamp: "Today, 14:15",
+    actionType: "TIME_BLOCK_OPTIMIZE",
+    summary: "Auto-scheduled 'Finalize Q3 Board Deck' into 1:30 PM slot",
+    revertable: true,
+    status: "applied", // 'applied' or 'reverted'
+    parameters: {
+      type: "SCHEDULE_SLOT",
+      slotId: "slot-1330",
+      previousState: { type: "open", title: "Available Focus Gap", taskId: null },
+      taskId: "task-1"
+    }
+  },
+  {
+    id: "log-2",
+    timestamp: "Today, 11:30",
+    actionType: "TRIAGE_PROMOTE",
+    summary: "Promoted 'Enterprise Vendor Agreement' from Tier 2 to Tier 1",
+    revertable: true,
+    status: "applied",
+    parameters: {
+      type: "TASK_TIER_MOVE",
+      taskId: "task-2",
+      fromTier: "upcoming",
+      toTier: "today"
+    }
+  }
+];
+
+// App State Store
+let tasks = JSON.parse(localStorage.getItem("aurawork_v3_tasks")) || INITIAL_TASKS;
+let followups = JSON.parse(localStorage.getItem("aurawork_v3_followups")) || INITIAL_FOLLOWUPS;
+let scheduleSlots = JSON.parse(localStorage.getItem("aurawork_v3_slots")) || INITIAL_SCHEDULE_SLOTS;
+let inboundEmails = JSON.parse(localStorage.getItem("aurawork_v3_emails")) || INITIAL_INBOUND_EMAILS;
+let archiveBatches = JSON.parse(localStorage.getItem("aurawork_v3_archive_batches")) || INITIAL_ARCHIVE_BATCHES;
+let auditLog = JSON.parse(localStorage.getItem("aurawork_v3_audit_log")) || INITIAL_AUDIT_LOG;
 let currentView = "dayflow";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -357,7 +412,6 @@ function setupGreeting() {
   }
 }
 
-// Navigation View Switcher
 function setupNavigation() {
   const navButtons = document.querySelectorAll(".nav-menu .nav-item");
   navButtons.forEach(btn => {
@@ -370,22 +424,14 @@ function setupNavigation() {
 
 function switchView(viewName) {
   currentView = viewName;
-
-  // Update nav buttons
   document.querySelectorAll(".nav-menu .nav-item").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
-
-  // Update view containers
   document.querySelectorAll(".view-container").forEach(view => {
     view.classList.remove("active");
   });
-
   const activeViewEl = document.getElementById(`view-${viewName}`);
-  if (activeViewEl) {
-    activeViewEl.classList.add("active");
-  }
-
+  if (activeViewEl) activeViewEl.classList.add("active");
   renderAll();
 }
 
@@ -408,21 +454,21 @@ function setupEventListeners() {
       followups = JSON.parse(JSON.stringify(INITIAL_FOLLOWUPS));
       scheduleSlots = JSON.parse(JSON.stringify(INITIAL_SCHEDULE_SLOTS));
       inboundEmails = JSON.parse(JSON.stringify(INITIAL_INBOUND_EMAILS));
+      archiveBatches = JSON.parse(JSON.stringify(INITIAL_ARCHIVE_BATCHES));
+      auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT_LOG));
       saveState();
       renderAll();
-      showToast("All sample data reset to initial prototype state");
+      showToast("Demo data & audit log restored to initial state");
     });
   }
 
   // Auto-Schedule Day AI Button
   const autoScheduleBtn = document.getElementById("autoScheduleBtn");
   if (autoScheduleBtn) {
-    autoScheduleBtn.addEventListener("click", () => {
-      runAutoSchedulingAI();
-    });
+    autoScheduleBtn.addEventListener("click", runAutoSchedulingAI);
   }
 
-  // AI Nudge Action Buttons
+  // Nudge Action Buttons
   const applyNudgeBtn = document.getElementById("applyNudgeScheduleBtn");
   if (applyNudgeBtn) {
     applyNudgeBtn.addEventListener("click", () => {
@@ -437,9 +483,15 @@ function setupEventListeners() {
       const lowTask = tasks.find(t => t.priority === "low" && t.tier === "today" && !t.completed);
       if (lowTask) {
         lowTask.tier = "upcoming";
+        logAiAction("TASK_DEFER", `Deferred '${lowTask.title}' to Tier 2 (This Week) to protect focus`, {
+          type: "TASK_TIER_MOVE",
+          taskId: lowTask.id,
+          fromTier: "today",
+          toTier: "upcoming"
+        });
         saveState();
         renderAll();
-        showToast(`Moved "${lowTask.title}" to Tier 2 (This Week) to protect focus`);
+        showToast(`Moved "${lowTask.title}" to Tier 2 (This Week)`);
       } else {
         showToast("No active low-priority tasks in Tier 1");
       }
@@ -455,7 +507,7 @@ function setupEventListeners() {
     });
   }
 
-  // Natural Language Quick-Add on Day Flow
+  // Quick Add NLP
   const quickInput = document.getElementById("quickAddInput");
   const previewBox = document.getElementById("nlpParsedPreview");
   const quickSubmit = document.getElementById("quickAddSubmitBtn");
@@ -488,15 +540,13 @@ function setupEventListeners() {
     quickSubmit.addEventListener("click", handleQuickAddSubmit);
   }
 
-  // Inventory search input
+  // Inventory Search Filter
   const searchInput = document.getElementById("inventorySearchInput");
   if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      renderInventoryTiers();
-    });
+    searchInput.addEventListener("input", renderInventoryTiers);
   }
 
-  // Now jump button on timeline
+  // Jump to Now button
   const nowJumpBtn = document.getElementById("nowJumpBtn");
   if (nowJumpBtn) {
     nowJumpBtn.addEventListener("click", () => {
@@ -509,7 +559,7 @@ function setupEventListeners() {
   }
 }
 
-// NLP Parser for Quick Add
+// NLP Parsing logic
 function parseNaturalLanguageTask(text) {
   let title = text;
   let duration = 30;
@@ -574,7 +624,7 @@ function handleQuickAddSubmit() {
   showToast(`Added to ${parsed.tier === 'today' ? "Today's Focus" : "Up Next"}: "${newTask.title}"`);
 }
 
-// Auto-Scheduling AI algorithm
+// AI Auto-Scheduling with Audit Logging
 function runAutoSchedulingAI() {
   let scheduledCount = 0;
   const unassignedTasks = tasks.filter(t => !t.completed && t.tier === "today" && !t.scheduledSlotId);
@@ -584,6 +634,7 @@ function runAutoSchedulingAI() {
   });
 
   const openSlots = scheduleSlots.filter(s => s.type === "open");
+  const scheduledDetails = [];
 
   for (let i = 0; i < Math.min(unassignedTasks.length, openSlots.length); i++) {
     const task = unassignedTasks[i];
@@ -593,40 +644,54 @@ function runAutoSchedulingAI() {
     slot.taskId = task.id;
     task.scheduledSlotId = slot.id;
     scheduledCount++;
+
+    scheduledDetails.push({ slotId: slot.id, taskId: task.id, title: task.title, time: slot.timeLabel });
   }
 
-  saveState();
-  renderAll();
-
   if (scheduledCount > 0) {
+    logAiAction("SCHEDULE_BLOCKS", `Auto-scheduled ${scheduledCount} high-priority tasks into timeline`, {
+      type: "BATCH_SCHEDULE",
+      scheduledDetails: scheduledDetails
+    });
+    saveState();
+    renderAll();
     showToast(`AI auto-blocked ${scheduledCount} high-impact task(s) into your schedule!`);
   } else {
     showToast("All eligible Today tasks are already scheduled or calendar is full.");
   }
 }
 
-// AI Auto-Triage: analyzes all backlog tasks and adjusts tiers based on urgency
+// AI Auto-Triage
 function runAiAutoTriage() {
   let promoted = 0;
+  const promotedIds = [];
   tasks.forEach(t => {
-    // If a task is high priority and in backlog, promote to Tier 2 (Upcoming)
     if (t.priority === "high" && t.tier === "backlog") {
       t.tier = "upcoming";
       promoted++;
+      promotedIds.push(t.id);
     }
   });
+
+  if (promoted > 0) {
+    logAiAction("TRIAGE_EVALUATE", `Promoted ${promoted} high-urgency task(s) from Backlog to Up Next`, {
+      type: "BATCH_TIER_MOVE",
+      taskIds: promotedIds,
+      fromTier: "backlog",
+      toTier: "upcoming"
+    });
+  }
 
   saveState();
   renderAll();
   showToast(`AI evaluated inventory: Promoted ${promoted || 1} priority item(s) to Up Next!`);
 }
 
-// Task Tier Assignment
 function setTaskTier(taskId, newTier) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
-  // If moving out of today, clear any schedule block
+  const oldTier = task.tier;
   if (task.tier === "today" && newTier !== "today" && task.scheduledSlotId) {
     const slot = scheduleSlots.find(s => s.id === task.scheduledSlotId);
     if (slot && slot.type === "focus") {
@@ -638,9 +703,16 @@ function setTaskTier(taskId, newTier) {
   }
 
   task.tier = newTier;
+  logAiAction("TIER_CHANGE", `Moved '${task.title}' from ${oldTier} to ${newTier}`, {
+    type: "TASK_TIER_MOVE",
+    taskId: task.id,
+    fromTier: oldTier,
+    toTier: newTier
+  });
+
   saveState();
   renderAll();
-  showToast(`Moved "${task.title.substring(0, 30)}..." to ${newTier.toUpperCase()}`);
+  showToast(`Moved to ${newTier.toUpperCase()}`);
 }
 
 // Task Completion & Management
@@ -697,6 +769,12 @@ function quickScheduleTask(taskId) {
   openSlot.taskId = task.id;
   task.scheduledSlotId = openSlot.id;
 
+  logAiAction("SCHEDULE_BLOCK", `Manually scheduled '${task.title}' into ${openSlot.timeLabel}`, {
+    type: "SCHEDULE_SLOT",
+    slotId: openSlot.id,
+    taskId: task.id
+  });
+
   saveState();
   renderAll();
   showToast(`Blocked ${openSlot.timeLabel} for "${task.title}"`);
@@ -720,7 +798,7 @@ function unassignSlot(slotId) {
   showToast("Focus block cleared");
 }
 
-// Mailbox Inbound Digest actions
+// Mailbox Action Digest
 function convertEmailToTask(emailId) {
   const email = inboundEmails.find(e => e.id === emailId);
   if (!email) return;
@@ -740,9 +818,15 @@ function convertEmailToTask(emailId) {
   tasks.unshift(newTask);
   inboundEmails = inboundEmails.filter(e => e.id !== emailId);
 
+  logAiAction("EMAIL_CONVERT", `Extracted task '${newTask.title}' from email '${email.subject}'`, {
+    type: "TASK_CREATED",
+    taskId: newTask.id,
+    emailId: email.id
+  });
+
   saveState();
   renderAll();
-  showToast(`Created Today task from email: "${newTask.title}"`);
+  showToast(`Created Today task: "${newTask.title}"`);
 }
 
 function dismissEmail(emailId) {
@@ -752,7 +836,7 @@ function dismissEmail(emailId) {
   showToast("Email dismissed from action list");
 }
 
-// Follow-ups Radar Actions
+// Follow-ups Radar
 function pingFollowUp(followupId) {
   const item = followups.find(f => f.id === followupId);
   if (!item) return;
@@ -792,26 +876,152 @@ function promptAddFollowUp() {
   showToast(`Added follow-up tracking for ${person}`);
 }
 
-// State Persistence
-function saveState() {
-  localStorage.setItem("aurawork_v2_tasks", JSON.stringify(tasks));
-  localStorage.setItem("aurawork_v2_followups", JSON.stringify(followups));
-  localStorage.setItem("aurawork_v2_slots", JSON.stringify(scheduleSlots));
-  localStorage.setItem("aurawork_v2_emails", JSON.stringify(inboundEmails));
+// ==========================================================================
+// BULK ARCHIVE COCKPIT & EXECUTION
+// ==========================================================================
+function toggleArchiveBatchSelection(batchId) {
+  const batch = archiveBatches.find(b => b.id === batchId);
+  if (!batch) return;
+  batch.selected = !batch.selected;
+  saveState();
+  renderBulkArchiveCockpit();
 }
 
-// Main Render Hub
+function executeBulkArchive() {
+  const selectedBatches = archiveBatches.filter(b => b.selected);
+  if (selectedBatches.length === 0) {
+    showToast("Please select at least one proposal batch to archive.");
+    return;
+  }
+
+  const allArchivedMailIds = [];
+  let totalArchivedCount = 0;
+  const batchSummaries = [];
+
+  selectedBatches.forEach(b => {
+    allArchivedMailIds.push(...b.mailIds);
+    totalArchivedCount += b.count;
+    batchSummaries.push(`${b.count} ${b.title}`);
+  });
+
+  // Remove archived batches from active proposals
+  archiveBatches = archiveBatches.filter(b => !b.selected);
+
+  // IMMUTABLE AUDIT LOG ENTRY
+  const logEntry = logAiAction("BULK_ARCHIVE", `Archived ${totalArchivedCount} emails via Outlook Graph API (${batchSummaries.join(', ')})`, {
+    type: "OUTLOOK_BULK_ARCHIVE",
+    mailIds: allArchivedMailIds,
+    batches: selectedBatches,
+    previousFolder: "Inbox",
+    targetFolder: "Archive"
+  });
+
+  saveState();
+  renderAll();
+  showToast(`Archived ${totalArchivedCount} emails. Action recorded in AI Audit Log.`);
+}
+
+// ==========================================================================
+// AI ACTION & AUDIT LOGGING WITH 1-CLICK REVERT
+// ==========================================================================
+function logAiAction(actionType, summary, parameters) {
+  const now = new Date();
+  const timeStr = `Today, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  const entry = {
+    id: `log-${Date.now()}`,
+    timestamp: timeStr,
+    actionType: actionType,
+    summary: summary,
+    revertable: true,
+    status: "applied",
+    parameters: parameters
+  };
+
+  auditLog.unshift(entry);
+  return entry;
+}
+
+function revertAiAction(logId) {
+  const entry = auditLog.find(l => l.id === logId);
+  if (!entry || entry.status === "reverted") return;
+
+  const params = entry.parameters;
+
+  if (params.type === "OUTLOOK_BULK_ARCHIVE") {
+    // Restore the batches back to active proposals
+    if (params.batches) {
+      params.batches.forEach(b => archiveBatches.push(b));
+    }
+    entry.status = "reverted";
+    showToast(`Undo successful: Moved ${params.mailIds.length} emails back to Outlook Inbox!`);
+  } else if (params.type === "BATCH_SCHEDULE") {
+    // Unassign focus slots
+    params.scheduledDetails.forEach(d => {
+      const slot = scheduleSlots.find(s => s.id === d.slotId);
+      if (slot) {
+        slot.type = "open";
+        slot.title = "Available Focus Gap";
+        slot.taskId = null;
+      }
+      const task = tasks.find(t => t.id === d.taskId);
+      if (task) task.scheduledSlotId = null;
+    });
+    entry.status = "reverted";
+    showToast(`Undo successful: Cleared auto-scheduled focus blocks from timeline.`);
+  } else if (params.type === "SCHEDULE_SLOT") {
+    const slot = scheduleSlots.find(s => s.id === params.slotId);
+    if (slot) {
+      slot.type = "open";
+      slot.title = "Available Focus Gap";
+      slot.taskId = null;
+    }
+    const task = tasks.find(t => t.id === params.taskId);
+    if (task) task.scheduledSlotId = null;
+    entry.status = "reverted";
+    showToast("Reverted scheduled time block.");
+  } else if (params.type === "TASK_TIER_MOVE") {
+    const task = tasks.find(t => t.id === params.taskId);
+    if (task) task.tier = params.fromTier;
+    entry.status = "reverted";
+    showToast(`Reverted '${task?.title || 'task'}' back to ${params.fromTier}.`);
+  } else if (params.type === "BATCH_TIER_MOVE") {
+    params.taskIds.forEach(id => {
+      const task = tasks.find(t => t.id === id);
+      if (task) task.tier = params.fromTier;
+    });
+    entry.status = "reverted";
+    showToast(`Reverted ${params.taskIds.length} tasks back to ${params.fromTier}.`);
+  }
+
+  saveState();
+  renderAll();
+}
+
+// State Persistence
+function saveState() {
+  localStorage.setItem("aurawork_v3_tasks", JSON.stringify(tasks));
+  localStorage.setItem("aurawork_v3_followups", JSON.stringify(followups));
+  localStorage.setItem("aurawork_v3_slots", JSON.stringify(scheduleSlots));
+  localStorage.setItem("aurawork_v3_emails", JSON.stringify(inboundEmails));
+  localStorage.setItem("aurawork_v3_archive_batches", JSON.stringify(archiveBatches));
+  localStorage.setItem("aurawork_v3_audit_log", JSON.stringify(auditLog));
+}
+
+// Render Hub
 function renderAll() {
   renderDayFlowTasks();
   renderTimeline();
   renderMiniInboundDigest();
   renderInventoryTiers();
   renderFollowups();
+  renderBulkArchiveCockpit();
   renderMailFeedView();
+  renderAuditLogView();
   renderMetrics();
 }
 
-// VIEW 1: Render Day Flow tasks (Tier 1: Today)
+// Day Flow tasks
 function renderDayFlowTasks() {
   const container = document.getElementById("taskListContainer");
   const countEl = document.getElementById("activeTaskCount");
@@ -868,7 +1078,7 @@ function renderDayFlowTasks() {
   }).join("");
 }
 
-// Render timeline
+// Timeline
 function renderTimeline() {
   const container = document.getElementById("timelineSlots");
   if (!container) return;
@@ -911,7 +1121,7 @@ function renderTimeline() {
   }).join("");
 }
 
-// Render mini email digest on Day Flow
+// Mini Inbound Digest on Day Flow
 function renderMiniInboundDigest() {
   const container = document.getElementById("digestItemsContainer");
   const badge = document.getElementById("miniEmailCountBadge");
@@ -944,7 +1154,7 @@ function renderMiniInboundDigest() {
   `).join("");
 }
 
-// VIEW 2: Render Task Inventory with 4 Tier Buckets
+// Task Inventory (4 Tiers)
 function renderInventoryTiers() {
   const searchVal = (document.getElementById("inventorySearchInput")?.value || "").toLowerCase();
 
@@ -999,7 +1209,7 @@ function renderInventoryTiers() {
   renderTierList(t4Tasks, "tierListSomeday");
 }
 
-// VIEW 3: Render Waiting & Follow-ups Radar
+// Follow-ups Radar
 function renderFollowups() {
   const container = document.getElementById("followupsListContainer");
   if (!container) return;
@@ -1037,7 +1247,50 @@ function renderFollowups() {
   `).join("");
 }
 
-// VIEW 4: Render Full AI Mailbox Feed
+// Bulk Archive Cockpit
+function renderBulkArchiveCockpit() {
+  const container = document.getElementById("bulkProposalsList");
+  const totalCountEl = document.getElementById("bulkArchiveCount");
+  const selectedCountEl = document.getElementById("selectedArchiveCount");
+  if (!container) return;
+
+  const totalPossible = archiveBatches.reduce((acc, b) => acc + b.count, 0);
+  const selectedCount = archiveBatches.filter(b => b.selected).reduce((acc, b) => acc + b.count, 0);
+
+  if (totalCountEl) totalCountEl.textContent = totalPossible;
+  if (selectedCountEl) selectedCountEl.textContent = selectedCount;
+
+  if (archiveBatches.length === 0) {
+    container.innerHTML = `
+      <div style="font-size: 0.85rem; color: var(--color-success); padding: 16px; text-align: center; background: rgba(16, 185, 129, 0.08); border-radius: var(--radius-md);">
+        ✓ All low-signal mail batches archived! Clean inbox maintained.
+      </div>
+    `;
+    const btn = document.getElementById("executeBulkArchiveBtn");
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  container.innerHTML = archiveBatches.map(batch => `
+    <div class="bulk-category-card">
+      <div class="bulk-cat-left">
+        <input 
+          type="checkbox" 
+          class="bulk-cat-checkbox" 
+          ${batch.selected ? 'checked' : ''} 
+          onchange="toggleArchiveBatchSelection('${batch.id}')"
+        >
+        <div>
+          <div class="bulk-cat-title">${escapeHtml(batch.title)}</div>
+          <div class="bulk-cat-samples">${escapeHtml(batch.sampleSubjects)}</div>
+        </div>
+      </div>
+      <span class="bulk-cat-count-badge">${batch.count} emails</span>
+    </div>
+  `).join("");
+}
+
+// Mail Feed Deliverables
 function renderMailFeedView() {
   const container = document.getElementById("mailFeedGridContainer");
   if (!container) return;
@@ -1071,7 +1324,48 @@ function renderMailFeedView() {
   `).join("");
 }
 
-// Capacity & Sidebar Counters
+// VIEW 5: Render AI Audit Log with 1-Click Revert
+function renderAuditLogView() {
+  const container = document.getElementById("auditLogListContainer");
+  const countBadge = document.getElementById("auditLogCountBadge");
+  if (!container) return;
+
+  if (countBadge) countBadge.textContent = auditLog.length;
+
+  if (auditLog.length === 0) {
+    container.innerHTML = `
+      <div style="font-size: 0.85rem; color: var(--text-tertiary); padding: 24px; text-align: center;">
+        No actions logged yet.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = auditLog.map(log => `
+    <div class="audit-log-row ${log.status === 'reverted' ? 'reverted' : ''}">
+      <span class="audit-time">${escapeHtml(log.timestamp)}</span>
+      <span class="audit-action-type">
+        <span style="color: #818cf8;">●</span> ${escapeHtml(log.actionType)}
+      </span>
+      <span class="audit-details-text">${escapeHtml(log.summary)}</span>
+      <div>
+        <span class="audit-status-tag ${log.status}">
+          ${log.status === 'applied' ? 'Active' : 'Reverted'}
+        </span>
+      </div>
+      <div>
+        ${log.status === 'applied' ? `
+          <button class="btn-revert" onclick="revertAiAction('${log.id}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            <span>Undo / Revert</span>
+          </button>
+        ` : `<span style="font-size: 0.75rem; color: var(--text-tertiary);">Reverted</span>`}
+      </div>
+    </div>
+  `).join("");
+}
+
+// Metrics
 function renderMetrics() {
   const todayTasks = tasks.filter(t => t.tier === "today" && !t.completed);
   const totalMinutes = todayTasks.reduce((acc, t) => acc + (t.duration || 30), 0);
@@ -1094,7 +1388,6 @@ function renderMetrics() {
   const completedStatEl = document.getElementById("statsCompletedCount");
   if (completedStatEl) completedStatEl.textContent = `${completedToday}/${totalToday}`;
 
-  // Badges in sidebar
   const totalBadge = document.getElementById("totalTasksBadge");
   if (totalBadge) totalBadge.textContent = tasks.length;
 
@@ -1130,7 +1423,7 @@ function escapeHtml(str) {
   );
 }
 
-// Global exports for inline HTML actions
+// Exports
 window.switchView = switchView;
 window.runAutoSchedulingAI = runAutoSchedulingAI;
 window.runAiAutoTriage = runAiAutoTriage;
@@ -1144,3 +1437,6 @@ window.dismissEmail = dismissEmail;
 window.pingFollowUp = pingFollowUp;
 window.resolveFollowUp = resolveFollowUp;
 window.promptAddFollowUp = promptAddFollowUp;
+window.toggleArchiveBatchSelection = toggleArchiveBatchSelection;
+window.executeBulkArchive = executeBulkArchive;
+window.revertAiAction = revertAiAction;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AuraWork AI — Daily Work & Focus Dashboard</title>
-  <meta name="description" content="AI-powered executive daily work dashboard, calendar time-blocking, tiered task structuring, mailbox assistant, and follow-up tracker.">
+  <meta name="description" content="AI-powered executive daily work dashboard, calendar time-blocking, tiered task structuring, mailbox assistant, follow-up tracker, and audit log.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -44,7 +44,12 @@
         <button class="nav-item" data-view="mailfeed" id="nav-mailfeed">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           <span>AI Mail Feed</span>
-          <span class="badge-count" id="inboxBadge">2</span>
+          <span class="badge-count" id="inboxBadge">3</span>
+        </button>
+        <button class="nav-item" data-view="auditlog" id="nav-auditlog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <span>AI Action & Audit Log</span>
+          <span class="badge-count" id="auditLogCountBadge">2</span>
         </button>
       </nav>
 
@@ -202,7 +207,7 @@
                   <span class="sparkle-icon">✦</span>
                   <span class="digest-title">Discovered from Inbound Emails</span>
                 </div>
-                <span class="digest-badge" id="miniEmailCountBadge">2 Pending Action</span>
+                <span class="digest-badge" id="miniEmailCountBadge">3 Pending Action</span>
               </div>
               <div class="digest-items" id="digestItemsContainer">
                 <!-- Rendered via JS -->
@@ -226,21 +231,18 @@
               </div>
             </div>
 
-            <!-- Visual Distribution bar -->
             <div class="schedule-legend">
               <div class="legend-item"><span class="legend-dot meeting"></span> Meetings (2.5h)</div>
               <div class="legend-item"><span class="legend-dot focus"></span> AI Focus Blocks (3.0h)</div>
               <div class="legend-item"><span class="legend-dot open"></span> Free Gaps (2.5h)</div>
             </div>
 
-            <!-- Hour-by-hour timeline -->
             <div class="timeline-scroll-area" id="timelineScrollArea">
               <div class="timeline-grid" id="timelineSlots">
                 <!-- Rendered hourly blocks -->
               </div>
             </div>
 
-            <!-- Daily Completion Summary Footer -->
             <div class="day-stats-footer">
               <div class="stat-bubble">
                 <span class="stat-number" id="statsCompletedCount">0/4</span>
@@ -377,21 +379,74 @@
       </section>
 
       <!-- =========================================================================
-           VIEW 4: AI MAIL FEED (INBOX EXTRACTOR)
+           VIEW 4: AI MAIL FEED & BULK ARCHIVE COCKPIT
            ========================================================================= -->
       <section class="view-container" id="view-mailfeed">
         <div class="inventory-header-bar">
           <div>
-            <h2 class="view-heading">AI Mailbox & Inbound Signal Feed</h2>
-            <p class="view-subheading">Intelligent natural-language scanner extracting action items, deadlines, and invites from incoming emails and chats.</p>
+            <h2 class="view-heading">AI Mailbox & Smart Outlook Assistant</h2>
+            <p class="view-subheading">Extract actionable tasks from incoming threads and safely clean low-signal emails with human-in-the-loop review.</p>
           </div>
           <div class="sync-status-badge">
             <span class="dot-live"></span> Connected to Outlook & Gmail • Last polled 2m ago
           </div>
         </div>
 
+        <!-- NEW: AI Bulk Archive Proposal Cockpit -->
+        <div class="bulk-archive-panel">
+          <div class="bulk-archive-header">
+            <div class="bulk-header-info">
+              <span class="sparkle-icon" style="font-size: 1.2rem;">⚡</span>
+              <div>
+                <h3 class="bulk-title">AI Proposed Clean-Up: <span id="bulkArchiveCount">16</span> Low-Signal Emails</h3>
+                <p class="bulk-desc">The AI identified low-signal calendar RSVPs, automated build alerts, and newsletters that are safe to archive.</p>
+              </div>
+            </div>
+            <div class="bulk-header-actions">
+              <button class="btn btn-magic" id="executeBulkArchiveBtn" onclick="executeBulkArchive()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                <span>Archive Selected (<span id="selectedArchiveCount">3</span>)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Proposal Categories Accordion / Selection -->
+          <div class="bulk-proposals-list" id="bulkProposalsList">
+            <!-- Injected by app.js -->
+          </div>
+        </div>
+
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-top: 10px;">Actionable Email Deliverables</h3>
         <div class="mailfeed-grid" id="mailFeedGridContainer">
           <!-- Injected by app.js -->
+        </div>
+      </section>
+
+      <!-- =========================================================================
+           VIEW 5: AI ACTION & AUDIT LOG (WITH REVERT / UNDO CAPABILITY)
+           ========================================================================= -->
+      <section class="view-container" id="view-auditlog">
+        <div class="inventory-header-bar">
+          <div>
+            <h2 class="view-heading">AI Action & Audit Log</h2>
+            <p class="view-subheading">Every modification, time block schedule, and mailbox action taken by the AI is immutably logged with its exact parameters and 1-click Revert capability.</p>
+          </div>
+          <div class="audit-summary-pill">
+            <span class="shield-icon">🛡️ Zero-Data-Loss Protected</span>
+          </div>
+        </div>
+
+        <div class="audit-log-card">
+          <div class="audit-log-table-header">
+            <span class="col-audit-time">TIMESTAMP</span>
+            <span class="col-audit-action">ACTION / SCOPE</span>
+            <span class="col-audit-details">TARGETS & PARAMETERS</span>
+            <span class="col-audit-status">STATUS</span>
+            <span class="col-audit-revert">REVERT / UNDO</span>
+          </div>
+          <div class="audit-log-list" id="auditLogListContainer">
+            <!-- Injected by app.js -->
+          </div>
         </div>
       </section>
     </main>
