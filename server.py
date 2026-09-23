@@ -284,6 +284,8 @@ def restore_archived_messages(payload: RestoreRequest):
 # Static Frontend Mounting
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+app.mount("/js", StaticFiles(directory=os.path.join(BASE_DIR, "js")), name="js")
+
 @app.get("/", include_in_schema=False)
 def serve_root():
     return FileResponse(os.path.join(BASE_DIR, "index.html"))
@@ -293,8 +295,10 @@ def serve_css():
     return FileResponse(os.path.join(BASE_DIR, "styles.css"), media_type="text/css")
 
 @app.get("/app.js", include_in_schema=False)
-def serve_js():
-    return FileResponse(os.path.join(BASE_DIR, "app.js"), media_type="application/javascript")
+def serve_legacy_js():
+    # Backwards compatibility fallback pointing to modular entry point
+    return FileResponse(os.path.join(BASE_DIR, "js", "app.js"), media_type="application/javascript")
+
 
 if __name__ == "__main__":
     import uvicorn

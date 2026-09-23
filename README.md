@@ -62,7 +62,15 @@ Open **`http://127.0.0.1:8000/`** in your browser.
 
 ## Testing
 
-Run the automated backend test suite (validates endpoints, payload schemas, and OpenAPI documentation):
+### 1. Automated Backend Unit & Integration Tests (pytest)
+Validates endpoints, SQLite schemas, and OpenAPI documentation:
 ```bash
 uv run pytest
 ```
+
+### 2. End-to-End Browser Tests (Playwright)
+Executes the comprehensive E2E test verifying SQLite connectivity, calendar lookahead, AI clean-up memory rules, bulk archive, and 1-click Revert:
+```bash
+npx playwright test
+```
+*(Ensure the FastAPI server is running with `uv run python server.py` before executing the E2E suite).*

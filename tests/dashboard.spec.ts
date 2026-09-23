@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ request }) => {
+  // Ensure pristine test database state
+  await request.post('http://127.0.0.1:8000/api/database/reset');
+});
+
 test('Verify Bulk Archive cockpit, AI Learning Memory rules, and 1-click Revert', async ({ page }) => {
-  const errors = [];
+  const errors: string[] = [];
   page.on('console', msg => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
