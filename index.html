@@ -175,36 +175,16 @@
             <div class="panel-header">
               <div class="panel-title-wrap">
                 <h2 class="panel-title">Today's Focus</h2>
-                <span class="counter-badge" id="activeTaskCount">4 active</span>
+                <span class="counter-badge" id="activeTaskCount">0 active</span>
               </div>
-              <button class="btn btn-sm btn-secondary" onclick="switchView('inventory')">
-                <span>View All Buckets (14) →</span>
-              </button>
-            </div>
-
-            <div class="quick-add-box">
-              <div class="quick-add-input-wrap">
-                <div class="input-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                </div>
-                <input 
-                  type="text" 
-                  id="quickAddInput" 
-                  class="quick-add-input" 
-                  placeholder="Quick add with AI e.g., 'Draft contract 45m high priority tomorrow' or 'Review budget 30m'"
-                  autocomplete="off"
-                >
-                <button class="btn btn-primary btn-sm" id="quickAddSubmitBtn">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="btn btn-primary btn-sm" onclick="window.aurawork.openTaskModal('today')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>Add Task</span>
-                  <kbd class="shortcut-kbd">↵</kbd>
                 </button>
-              </div>
-              <div class="quick-add-parsed-preview" id="nlpParsedPreview" style="display: none;">
-                <span class="preview-label">AI Extracted:</span>
-                <span class="tag-pill" id="previewTitle">Task</span>
-                <span class="tag-pill tag-duration" id="previewDuration">30m</span>
-                <span class="tag-pill tag-priority" id="previewPriority">Medium</span>
-                <span class="tag-pill tag-due" id="previewDue">Today</span>
+                <button class="btn btn-sm btn-secondary" onclick="switchView('inventory')">
+                  <span>View All Buckets →</span>
+                </button>
               </div>
             </div>
 

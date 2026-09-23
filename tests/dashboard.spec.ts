@@ -27,8 +27,10 @@ test('Verify Productive Flow: Task Creation Modal, Outlook Calendar, Mailbox Cle
   await expect(page.locator('.sidebar-integrations')).toContainText('Outlook Calendar');
   await expect(page.locator('.sidebar-integrations')).not.toContainText('Google Calendar');
 
-  // 2. Test Task Creation via New Task Modal
-  await page.click('#openCreateTaskModalBtn');
+  // 2. Test Task Creation via New Task Modal from Day Flow Page
+  const dayFlowAddTaskBtn = page.locator('#view-dayflow button:has-text("Add Task")');
+  await expect(dayFlowAddTaskBtn).toBeVisible();
+  await dayFlowAddTaskBtn.click();
   const taskModal = page.locator('#taskModalBackdrop');
   await expect(taskModal).toBeVisible();
 
