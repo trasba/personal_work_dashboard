@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('Dashboard loads correctly with tasks and timeline', async ({ page }) => {
+test('Multi-view navigation: Day Flow, Task Inventory tiers, Follow-ups Radar, and Mail Feed', async ({ page }) => {
   const errors = [];
   page.on('console', msg => {
     if (msg.type() === 'error') errors.push(msg.text());
@@ -9,21 +9,33 @@ test('Dashboard loads correctly with tasks and timeline', async ({ page }) => {
 
   await page.goto('http://localhost:5173/');
 
-  // Check header title and branding
-  await expect(page.locator('.brand-title')).toHaveText('AuraWork');
-  await expect(page.locator('#greetingTitle')).toContainText('Good');
+  // 1. Day Flow view is active by default
+  await expect(page.locator('#view-dayflow')).toBeVisible();
+  await expect(page.locator('#view-inventory')).toBeHidden();
 
-  // Verify task items rendered
-  const taskItems = page.locator('.task-item');
-  await expect(taskItems).toHaveCount(4); // 4 active today tasks initially
+  // 2. Navigate to Task Inventory
+  await page.click('#nav-inventory');
+  await expect(page.locator('#view-inventory')).toBeVisible();
+  await expect(page.locator('#view-dayflow')).toBeHidden();
+  await expect(page.locator('.tier-column')).toHaveCount(4); // 4 Tier buckets
 
-  // Verify timeline slots rendered
-  const slots = page.locator('.slot-card');
-  await expect(slots).toHaveCount(9);
+  // 3. Navigate to Waiting & Follow-ups Radar
+  await page.click('#nav-followups');
+  await expect(page.locator('#view-followups')).toBeVisible();
+  await expect(page.locator('.followup-row')).toHaveCount(4);
 
-  // Take a static screenshot for visual verification
-  await page.screenshot({ path: 'dashboard-preview.png', fullPage: true });
+  // 4. Navigate to AI Mail Feed
+  await page.click('#nav-mailfeed');
+  await expect(page.locator('#view-mailfeed')).toBeVisible();
+  await expect(page.locator('.mailfeed-card')).toHaveCount(3);
 
-  // Verify no console or runtime exceptions
+  // Take a static screenshot of the new Task Inventory view
+  await page.click('#nav-inventory');
+  await page.screenshot({ path: 'inventory-tiers-preview.png', fullPage: true });
+
+  // Take a static screenshot of Waiting & Follow-ups
+  await page.click('#nav-followups');
+  await page.screenshot({ path: 'followups-preview.png', fullPage: true });
+
   expect(errors).toEqual([]);
 });

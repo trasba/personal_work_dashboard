@@ -193,7 +193,7 @@ body.light-theme .brand-title {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
@@ -225,6 +225,11 @@ body.light-theme .brand-title {
   color: white;
   border-radius: var(--radius-full);
   font-weight: 700;
+}
+
+.badge-count.badge-warning {
+  background: #f59e0b;
+  color: #0f172a;
 }
 
 .sidebar-integrations {
@@ -340,9 +345,26 @@ body.light-theme .brand-title {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  max-width: 1480px;
+  max-width: 1540px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* View Containers (Page router) */
+.view-container {
+  display: none;
+  flex-direction: column;
+  gap: 22px;
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.view-container.active {
+  display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Top Nav Header */
@@ -458,10 +480,6 @@ body.light-theme .metric-bar {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px var(--accent-magic-glow);
   filter: brightness(1.08);
-}
-
-.btn-magic:active {
-  transform: translateY(0);
 }
 
 .btn-secondary {
@@ -607,7 +625,7 @@ body.light-theme .ai-briefing-text {
 }
 
 /* ==========================================================================
-   Dashboard Main Grid (Tasks + Timeline)
+   Dashboard Main Grid (Day Flow)
    ========================================================================== */
 .dashboard-grid {
   display: grid;
@@ -661,33 +679,6 @@ body.light-theme .ai-briefing-text {
   background: rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
-}
-
-.tab-pills {
-  display: flex;
-  background: var(--bg-canvas);
-  border: 1px solid var(--border-subtle);
-  padding: 3px;
-  border-radius: var(--radius-sm);
-  gap: 2px;
-}
-
-.tab-pill {
-  border: none;
-  background: transparent;
-  padding: 5px 12px;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.tab-pill.active {
-  background: var(--bg-surface-elevated);
-  color: var(--text-main);
-  box-shadow: var(--shadow-sm);
 }
 
 /* Quick Add Box */
@@ -799,14 +790,14 @@ body.light-theme .ai-briefing-text {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 280px;
+  min-height: 240px;
 }
 
 .task-item {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
+  padding: 13px 16px;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -926,7 +917,7 @@ body.light-theme .ai-briefing-text {
 }
 
 /* ==========================================================================
-   Mailbox / Smart Inbound Digest Card
+   Mailbox / Inbound Digest Cards
    ========================================================================== */
 .inbox-digest-card {
   background: rgba(15, 23, 42, 0.6);
@@ -1168,7 +1159,6 @@ body.light-theme .ai-briefing-text {
   gap: 10px;
 }
 
-/* Slot Types */
 .slot-meeting {
   background: var(--event-meeting-bg);
   border: 1px solid var(--event-meeting-border);
@@ -1195,11 +1185,6 @@ body.light-theme .ai-briefing-text {
 .slot-open {
   background: var(--event-open-bg);
   border: 1px var(--event-open-border);
-  cursor: pointer;
-}
-
-.slot-open:hover {
-  background: rgba(255, 255, 255, 0.05);
 }
 
 .slot-open .slot-title {
@@ -1276,6 +1261,446 @@ body.light-theme .ai-briefing-text {
 
 .text-success {
   color: var(--color-success);
+}
+
+/* ==========================================================================
+   VIEW 2: TASK INVENTORY (AI TRIAGE & TIER BUCKETS)
+   ========================================================================== */
+.inventory-header-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+.view-heading {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+}
+
+.view-subheading {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  max-width: 780px;
+  margin-top: 2px;
+}
+
+.inventory-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-input-wrap input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.85rem;
+  width: 260px;
+  outline: none;
+}
+
+.search-input-wrap input:focus {
+  border-color: var(--accent-primary);
+}
+
+/* Tiers 4-Column Grid */
+.tiers-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .tiers-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .tiers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tier-column {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 480px;
+}
+
+.tier-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tier-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tier-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tier-indicator.t1 { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+.tier-indicator.t2 { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+.tier-indicator.t3 { background: #3b82f6; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
+.tier-indicator.t4 { background: #64748b; }
+
+.tier-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.tier-limit {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.tier-dropzone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+/* Tier Task Cards */
+.inventory-task-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.inventory-task-card:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.inventory-card-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.inventory-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.tier-move-select {
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  outline: none;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   VIEW 3: WAITING & FOLLOW-UPS RADAR
+   ========================================================================== */
+.followup-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.follow-stat {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.follow-stat.danger {
+  border-left: 4px solid var(--color-danger);
+}
+
+.follow-stat.warning {
+  border-left: 4px solid var(--color-warning);
+}
+
+.follow-stat.success {
+  border-left: 4px solid var(--color-success);
+}
+
+.stat-big {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-main);
+}
+
+.stat-lbl {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.followups-table-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.followups-table-header {
+  display: grid;
+  grid-template-columns: 180px 1.8fr 110px 110px 140px 150px;
+  padding: 12px 18px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+
+.followups-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.followup-row {
+  display: grid;
+  grid-template-columns: 180px 1.8fr 110px 110px 140px 150px;
+  padding: 14px 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast);
+  font-size: 0.85rem;
+}
+
+.followup-row:hover {
+  background: var(--bg-surface-elevated);
+}
+
+.followup-row.overdue {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.followup-person {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.followup-topic {
+  color: var(--text-main);
+  padding-right: 16px;
+}
+
+.followup-source {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.followup-date {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.status-badge.overdue {
+  background: var(--color-danger-bg);
+  color: #f87171;
+}
+
+.status-badge.waiting {
+  background: var(--color-warning-bg);
+  color: #fbbf24;
+}
+
+.status-badge.resolved {
+  background: var(--color-success-bg);
+  color: #34d399;
+}
+
+.btn-ping {
+  padding: 5px 10px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-ping:hover {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* ==========================================================================
+   VIEW 4: AI MAIL FEED
+   ========================================================================== */
+.sync-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+}
+
+.dot-live {
+  width: 7px;
+  height: 7px;
+  background: var(--color-success);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.mailfeed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
+}
+
+.mailfeed-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all var(--transition-fast);
+}
+
+.mailfeed-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-md);
+}
+
+.mailfeed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.mail-sender-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.mail-sender-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.mail-time {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.mail-urgency-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+}
+
+.mail-urgency-pill.high {
+  background: var(--color-danger-bg);
+  color: #f87171;
+}
+
+.mail-urgency-pill.medium {
+  background: var(--color-warning-bg);
+  color: #fbbf24;
+}
+
+.mail-subject {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.mail-snippet {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.ai-extraction-box {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-ext-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a5b4fc;
+}
+
+.ai-ext-desc {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.mail-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
 }
 
 /* Toast Notifications */
