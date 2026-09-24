@@ -4,7 +4,8 @@ Communicates directly with the local Windows Outlook desktop application
 via COM automation (win32com.client).
 """
 
-from typing import List, Dict, Any, Optional
+from contextlib import contextmanager
+from typing import Iterator, List, Dict, Any, Optional
 from datetime import datetime, date
 import sys
 
@@ -13,6 +14,7 @@ HAS_WIN32COM = False
 try:
     if sys.platform == "win32":
         import win32com.client
+        import pythoncom
         HAS_WIN32COM = True
 except Exception:
     HAS_WIN32COM = False
@@ -38,8 +40,6 @@ class OutlookMapiService:
         # "live" for productive Outlook connection (raises errors if unavailable)
         # "mock" for simulated development/testing
         self.mode = mode.lower() if mode in ("live", "mock") else "mock"
-        self._outlook = None
-        self._namespace = None
         self._mock_calendar_cleared = False
         self._mock_inbox_cleared = False
 
@@ -50,10 +50,6 @@ class OutlookMapiService:
         if mode not in ("live", "mock"):
             raise ValueError("Mode must be 'live' or 'mock'")
         self.mode = mode
-        if mode == "live":
-            # Reset cached namespace so it verifies freshly
-            self._namespace = None
-            self._outlook = None
 
     def check_connection(self) -> Dict[str, Any]:
         """
@@ -78,10 +74,9 @@ class OutlookMapiService:
             }
 
         try:
-            outlook = win32com.client.Dispatch("Outlook.Application")
-            ns = outlook.GetNamespace("MAPI")
-            current_user = getattr(ns, "CurrentUser", None)
-            user_name = getattr(current_user, "Name", "Unknown") if current_user else "Authenticated User"
+            with self._mapi_session() as ns:
+                current_user = getattr(ns, "CurrentUser", None)
+                user_name = getattr(current_user, "Name", "Unknown") if current_user else "Authenticated User"
             return {
                 "mode": self.mode,
                 "connected": True,
@@ -96,6 +91,25 @@ class OutlookMapiService:
                 "pywin32_available": True,
                 "error": str(e)
             }
+
+    @contextmanager
+    def _mapi_session(self) -> Iterator[Any]:
+        """Create Outlook COM objects in the current request thread."""
+        if self.mode == "mock":
+            yield None
+            return
+
+        if not HAS_WIN32COM:
+            raise RuntimeError("pywin32 COM automation is unavailable on this system")
+
+        pythoncom.CoInitialize()
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            yield outlook.GetNamespace("MAPI")
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect to local Outlook via MAPI: {e}") from e
+        finally:
+            pythoncom.CoUninitialize()
 
     def clear_mock_calendar(self):
         """Clears mock calendar events when cleaning prototype data."""
@@ -113,22 +127,6 @@ class OutlookMapiService:
         """Restores mock inbox messages when loading demo data."""
         self._mock_inbox_cleared = False
 
-    def _get_namespace(self):
-        """Initializes and returns the MAPI namespace, or raises error in live mode."""
-        if self.mode == "mock":
-            return None
-
-        if not HAS_WIN32COM:
-            raise RuntimeError("pywin32 COM automation is unavailable on this system")
-
-        if self._namespace is None:
-            try:
-                self._outlook = win32com.client.Dispatch("Outlook.Application")
-                self._namespace = self._outlook.GetNamespace("MAPI")
-            except Exception as e:
-                raise RuntimeError(f"Failed to connect to local Outlook via MAPI: {e}")
-        return self._namespace
-
     def get_inbox_messages(self, limit: int = 50, unread_only: bool = False) -> List[Dict[str, Any]]:
         """
         Retrieves recent emails from the Outlook Inbox.
@@ -138,42 +136,40 @@ class OutlookMapiService:
         if self.mode == "mock":
             return self._mock_inbox_messages()
 
-        ns = self._get_namespace()
-
         try:
-            inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
-            messages = inbox.Items
-            messages.Sort("[ReceivedTime]", True)  # Sort descending
+            with self._mapi_session() as ns:
+                inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
+                messages = inbox.Items
+                messages.Sort("[ReceivedTime]", True)
 
-            results = []
-            count = 0
-            for msg in messages:
-                if count >= limit:
-                    break
-                try:
-                    if unread_only and not msg.UnRead:
+                results = []
+                count = 0
+                for msg in messages:
+                    if count >= limit:
+                        break
+                    try:
+                        if unread_only and not msg.UnRead:
+                            continue
+
+                        entry_id = getattr(msg, "EntryID", f"mock-{count}")
+                        subject = getattr(msg, "Subject", "(No Subject)")
+                        sender = getattr(msg, "SenderName", "")
+                        sender_email = getattr(msg, "SenderEmailAddress", "")
+                        received_time = getattr(msg, "ReceivedTime", None)
+                        body_snippet = (getattr(msg, "Body", "") or "")[:200].replace("\r\n", " ").strip()
+
+                        results.append({
+                            "entry_id": entry_id,
+                            "subject": subject,
+                            "sender_name": sender,
+                            "sender_email": sender_email,
+                            "received_time": str(received_time) if received_time else "",
+                            "unread": bool(getattr(msg, "UnRead", False)),
+                            "body_snippet": body_snippet
+                        })
+                        count += 1
+                    except Exception:
                         continue
-
-                    # Extract properties safely
-                    entry_id = getattr(msg, "EntryID", f"mock-{count}")
-                    subject = getattr(msg, "Subject", "(No Subject)")
-                    sender = getattr(msg, "SenderName", "")
-                    sender_email = getattr(msg, "SenderEmailAddress", "")
-                    received_time = getattr(msg, "ReceivedTime", None)
-                    body_snippet = (getattr(msg, "Body", "") or "")[:200].replace("\r\n", " ").strip()
-
-                    results.append({
-                        "entry_id": entry_id,
-                        "subject": subject,
-                        "sender_name": sender,
-                        "sender_email": sender_email,
-                        "received_time": str(received_time) if received_time else "",
-                        "unread": bool(getattr(msg, "UnRead", False)),
-                        "body_snippet": body_snippet
-                    })
-                    count += 1
-                except Exception:
-                    continue
 
             return results
         except Exception as e:
@@ -204,39 +200,39 @@ class OutlookMapiService:
         if self.mode == "mock":
             return self._mock_calendar_events(start_date, end_date)
 
-        ns = self._get_namespace()
         try:
-            calendar = ns.GetDefaultFolder(self.OL_FOLDER_CALENDAR)
-            items = calendar.Items
-            items.IncludeRecurrences = True
-            items.Sort("[Start]")
+            with self._mapi_session() as ns:
+                calendar = ns.GetDefaultFolder(self.OL_FOLDER_CALENDAR)
+                items = calendar.Items
+                items.IncludeRecurrences = True
+                items.Sort("[Start]")
 
-            start_str = start_date.strftime("%m/%d/%Y 00:00 AM")
-            end_str = end_date.strftime("%m/%d/%Y 11:59 PM")
-            filter_query = f"[Start] >= '{start_str}' AND [End] <= '{end_str}'"
-            restricted_items = items.Restrict(filter_query)
+                start_str = start_date.strftime("%m/%d/%Y 12:00 AM")
+                end_str = (end_date + timedelta(days=1)).strftime("%m/%d/%Y 12:00 AM")
+                filter_query = f"[Start] >= '{start_str}' AND [Start] < '{end_str}'"
+                restricted_items = items.Restrict(filter_query)
 
-            events = []
-            for item in restricted_items:
-                try:
-                    subject = getattr(item, "Subject", "Meeting")
-                    start_time = getattr(item, "Start", None)
-                    end_time = getattr(item, "End", None)
-                    duration = getattr(item, "Duration", 30)
-                    location = getattr(item, "Location", "")
-                    is_meeting = bool(getattr(item, "MeetingStatus", 0) > 0)
+                events = []
+                for item in restricted_items:
+                    try:
+                        subject = getattr(item, "Subject", "Meeting")
+                        start_time = getattr(item, "Start", None)
+                        end_time = getattr(item, "End", None)
+                        duration = getattr(item, "Duration", 30)
+                        location = getattr(item, "Location", "")
+                        is_meeting = bool(getattr(item, "MeetingStatus", 0) > 0)
 
-                    events.append({
-                        "entry_id": getattr(item, "EntryID", ""),
-                        "subject": subject,
-                        "start_time": str(start_time),
-                        "end_time": str(end_time) if end_time else "",
-                        "duration_minutes": duration,
-                        "location": location,
-                        "is_meeting": is_meeting
-                    })
-                except Exception:
-                    continue
+                        events.append({
+                            "entry_id": getattr(item, "EntryID", ""),
+                            "subject": subject,
+                            "start_time": str(start_time),
+                            "end_time": str(end_time) if end_time else "",
+                            "duration_minutes": duration,
+                            "location": location,
+                            "is_meeting": is_meeting
+                        })
+                    except Exception:
+                        continue
 
             return events
         except Exception as e:
@@ -249,8 +245,7 @@ class OutlookMapiService:
         Moves a batch of emails from Inbox into the Archive folder via MAPI.
         Returns the list of successfully moved entry_ids.
         """
-        ns = self._get_namespace()
-        if ns is None:
+        if self.mode == "mock":
             return {
                 "success": True,
                 "archived_count": len(entry_ids),
@@ -260,31 +255,29 @@ class OutlookMapiService:
             }
 
         try:
-            inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
-            # Find or fallback to Archive folder
-            archive_folder = None
-            try:
-                # Try getting well-known archive or top-level 'Archive' folder
-                archive_folder = inbox.Parent.Folders("Archive")
-            except Exception:
+            with self._mapi_session() as ns:
+                inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
+                archive_folder = None
                 try:
-                    archive_folder = inbox.Folders("Archive")
+                    archive_folder = inbox.Parent.Folders("Archive")
                 except Exception:
-                    pass
+                    try:
+                        archive_folder = inbox.Folders("Archive")
+                    except Exception:
+                        pass
 
-            # If no Archive folder exists, fallback to Deleted Items
-            if archive_folder is None:
-                archive_folder = ns.GetDefaultFolder(self.OL_FOLDER_DELETED)
+                if archive_folder is None:
+                    archive_folder = ns.GetDefaultFolder(self.OL_FOLDER_DELETED)
 
-            moved_ids = []
-            for entry_id in entry_ids:
-                try:
-                    item = ns.GetItemFromID(entry_id)
-                    if item:
-                        item.Move(archive_folder)
-                        moved_ids.append(entry_id)
-                except Exception:
-                    continue
+                moved_ids = []
+                for entry_id in entry_ids:
+                    try:
+                        item = ns.GetItemFromID(entry_id)
+                        if item:
+                            item.Move(archive_folder)
+                            moved_ids.append(entry_id)
+                    except Exception:
+                        continue
 
             return {
                 "success": True,
@@ -300,8 +293,7 @@ class OutlookMapiService:
         """
         Moves previously archived messages back to the Inbox (Undo / Revert).
         """
-        ns = self._get_namespace()
-        if ns is None:
+        if self.mode == "mock":
             return {
                 "success": True,
                 "restored_count": len(entry_ids),
@@ -311,16 +303,17 @@ class OutlookMapiService:
             }
 
         try:
-            inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
-            restored_ids = []
-            for entry_id in entry_ids:
-                try:
-                    item = ns.GetItemFromID(entry_id)
-                    if item:
-                        item.Move(inbox)
-                        restored_ids.append(entry_id)
-                except Exception:
-                    continue
+            with self._mapi_session() as ns:
+                inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
+                restored_ids = []
+                for entry_id in entry_ids:
+                    try:
+                        item = ns.GetItemFromID(entry_id)
+                        if item:
+                            item.Move(inbox)
+                            restored_ids.append(entry_id)
+                    except Exception:
+                        continue
 
             return {
                 "success": True,
