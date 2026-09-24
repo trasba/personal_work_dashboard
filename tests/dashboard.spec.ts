@@ -98,6 +98,10 @@ test('Verify Productive Flow: Task Creation Modal, Outlook Calendar, Mailbox Cle
   await page.click('#nav-dayflow');
   await expect(page.locator('#taskListContainer')).toContainText("No tasks assigned to Today's Focus");
 
+  // Verify calendar timeline is cleaned up
+  await expect(page.locator('#timelineSlots')).toContainText("No events or time blocks scheduled");
+  await expect(page.locator('.slot-card')).toHaveCount(0);
+
   // Single static screenshot for layout verification
   await page.screenshot({ path: 'productive-clean-dashboard.png' });
 

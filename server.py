@@ -145,12 +145,17 @@ def get_system_health():
 def reset_database(seed: bool = True):
     """Resets database schema and re-seeds prototype data if seed=True."""
     db.init_db(force_reset=True, seed_dummy=seed)
+    if seed:
+        mapi_service.reset_mock_calendar()
+    else:
+        mapi_service.clear_mock_calendar()
     return {"success": True, "message": "Database reset to initial demo seeds" if seed else "Database reset to clean schema"}
 
 @app.post("/api/database/clean", tags=["System"])
 def clean_database():
     """Wipes all tasks, followups, audit logs and rules with an automatic timestamped backup."""
     result = db.clear_all_data(create_backup_first=True)
+    mapi_service.clear_mock_calendar()
     return result
 
 @app.post("/api/database/backup", tags=["System"])

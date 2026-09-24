@@ -67,6 +67,16 @@ export function renderTimeline() {
   const container = document.getElementById("timelineSlots");
   if (!container) return;
 
+  if (!state.scheduleSlots || state.scheduleSlots.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 48px 16px; color: var(--text-tertiary);">
+        <p style="font-size: 0.95rem; margin-bottom: 6px; color: var(--text-secondary);">No events or time blocks scheduled</p>
+        <span style="font-size: 0.8rem;">Your schedule is clear. Sync events from Outlook Calendar or auto-schedule focus blocks from tasks.</span>
+      </div>
+    `;
+    return;
+  }
+
   container.innerHTML = state.scheduleSlots.map(slot => {
     let typeClass = `slot-${slot.type}`;
     let badgeHtml = "";
@@ -138,10 +148,15 @@ export async function fetchOutlookCalendar(days = 1) {
       ];
 
       state.scheduleSlots = [...mappedMeetingSlots, ...existingFocusSlots, ...openGapSlots];
-      renderTimeline();
-      renderMetrics();
+    } else if (Array.isArray(events) && events.length === 0) {
+      // Calendar returned 0 events (clean or empty calendar)
+      const existingFocusSlots = state.scheduleSlots.filter(s => s.type === "focus" && !s.locked);
+      state.scheduleSlots = [...existingFocusSlots];
     }
+    renderTimeline();
+    renderMetrics();
   } catch (e) {
     console.warn("[AuraWork] Error loading Outlook calendar:", e);
   }
 }
+

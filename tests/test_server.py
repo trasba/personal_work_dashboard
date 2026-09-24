@@ -158,8 +158,13 @@ def test_database_backup_and_clean():
     post_tasks = client.get("/api/tasks").json()
     assert len(post_tasks) == 0
 
+    # Verify mock calendar is also cleaned
+    clean_cal = client.get("/api/outlook/calendar").json()
+    assert len(clean_cal) == 0
+
     # Restore seeds for other tests
     reset_res = client.post("/api/database/reset")
     assert reset_res.status_code == 200
     assert len(client.get("/api/tasks").json()) > 0
+    assert len(client.get("/api/outlook/calendar").json()) > 0
 

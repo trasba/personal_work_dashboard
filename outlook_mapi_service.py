@@ -38,6 +38,15 @@ class OutlookMapiService:
         self.use_mock_fallback = use_mock_fallback
         self._outlook = None
         self._namespace = None
+        self._mock_calendar_cleared = False
+
+    def clear_mock_calendar(self):
+        """Clears mock calendar events when cleaning prototype data."""
+        self._mock_calendar_cleared = True
+
+    def reset_mock_calendar(self):
+        """Restores mock calendar events when loading demo data."""
+        self._mock_calendar_cleared = False
 
     def _get_namespace(self):
         """Initializes and returns the MAPI namespace."""
@@ -290,6 +299,8 @@ class OutlookMapiService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> List[Dict[str, Any]]:
+        if self._mock_calendar_cleared:
+            return []
         from datetime import timedelta
         base_date = start_date or date.today()
 
