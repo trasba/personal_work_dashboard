@@ -7,6 +7,9 @@ import { apiRequest } from "../api.js";
 import { showToast, escapeHtml } from "./toast.js";
 import { renderMetrics } from "./metrics.js";
 import { logAiAction } from "../ai-engine.js";
+import { formatSlotTimeLabel } from "./timeformat.js";
+
+export { formatSlotTimeLabel, parseEventStartTime } from "./timeformat.js";
 
 export function renderDayFlowTasks() {
   const container = document.getElementById("taskListContainer");
@@ -120,18 +123,11 @@ export async function fetchOutlookCalendar(days = 1) {
   try {
     const events = await apiRequest(`/api/outlook/calendar?days=${days}`);
     if (Array.isArray(events) && events.length > 0) {
+      const today = new Date();
       const mappedMeetingSlots = events.map((ev, idx) => {
-        let timeLabel = "9:00 AM";
-        if (ev.start_time.includes("09:00")) timeLabel = "9:00 AM";
-        else if (ev.start_time.includes("09:30")) timeLabel = "9:30 AM";
-        else if (ev.start_time.includes("10:00")) timeLabel = "10:00 AM";
-        else if (ev.start_time.includes("14:00")) timeLabel = "2:00 PM";
-        else if (ev.start_time.includes("15:30")) timeLabel = "3:30 PM";
-        else timeLabel = `${9 + (idx * 2)}:00 AM`;
-
         return {
           id: `slot-mapi-${idx}`,
-          timeLabel: timeLabel,
+          timeLabel: formatSlotTimeLabel(ev.start_time, today),
           type: ev.is_meeting ? "meeting" : "focus",
           title: ev.subject,
           durationText: `${ev.duration_minutes}m`,

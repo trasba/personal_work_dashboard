@@ -2,8 +2,10 @@
   "name": "aurawork-dashboard",
   "version": "1.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node scripts/run-unit-tests.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"
