@@ -11,7 +11,7 @@ import { renderMetrics } from "./ui/metrics.js";
 import { renderDayFlowTasks, renderTimeline, fetchOutlookCalendar } from "./ui/dayflow.js";
 import { renderInventoryTiers, setTaskTier, toggleTaskCompletion, deleteTask, quickScheduleTask, unassignSlot } from "./ui/inventory.js";
 import { renderFollowups, pingFollowUp, resolveFollowUp, promptAddFollowUp } from "./ui/followups.js";
-import { renderMailFeedView, renderMiniInboundDigest, convertEmailToTask, dismissEmail } from "./ui/mailfeed.js";
+import { renderMailFeedView, renderMiniInboundDigest, convertEmailToTask, dismissEmail, fetchOutlookEmails } from "./ui/mailfeed.js";
 import { renderBulkArchiveCockpit, toggleArchiveBatchSelection, executeBulkArchive } from "./ui/bulkarchive.js";
 import { renderAuditLogView } from "./ui/auditlog.js";
 import { logAiAction, runAutoSchedulingAI, runAiAutoTriage, teachAiCleanUpRule, teachEmailCleanUp, removeLearnedRule, revertAiAction } from "./ai-engine.js";
@@ -209,6 +209,9 @@ function setupEventListeners() {
       const isShown = settingsMenu.style.display === "flex";
       settingsMenu.style.display = isShown ? "none" : "flex";
     });
+    settingsMenu.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
     document.addEventListener("click", () => {
       settingsMenu.style.display = "none";
     });
@@ -255,6 +258,42 @@ function setupEventListeners() {
     });
   }
 
+  // Outlook Mode Radio Toggles
+  const modeLiveRadio = document.getElementById("modeLiveRadio");
+  const modeMockRadio = document.getElementById("modeMockRadio");
+
+  if (modeLiveRadio && modeMockRadio) {
+    const handleModeToggle = () => {
+      if (modeLiveRadio.checked) setOutlookMode("live");
+      else if (modeMockRadio.checked) setOutlookMode("mock");
+    };
+    modeLiveRadio.addEventListener("change", handleModeToggle);
+    modeMockRadio.addEventListener("change", handleModeToggle);
+    modeLiveRadio.addEventListener("click", () => setOutlookMode("live"));
+    modeMockRadio.addEventListener("click", () => setOutlookMode("mock"));
+  }
+
+  // Test Outlook Connection Button
+  const testConnBtn = document.getElementById("testOutlookConnBtn");
+  if (testConnBtn) {
+    testConnBtn.addEventListener("click", testOutlookConnection);
+  }
+
+  // Clicking sidebar integration pills opens Settings
+  const sidebarCalPill = document.getElementById("sidebarOutlookCalPill");
+  const sidebarMailPill = document.getElementById("sidebarOutlookMailPill");
+  [sidebarCalPill, sidebarMailPill].forEach(pill => {
+    if (pill) {
+      pill.style.cursor = "pointer";
+      pill.title = "Click to configure Outlook mode & connection";
+      pill.addEventListener("click", () => {
+        if (settingsMenu) {
+          settingsMenu.style.display = "flex";
+        }
+      });
+    }
+  });
+
   // Load Demo Data Option
   const loadDemoBtn = document.getElementById("loadDemoDataBtn");
   if (loadDemoBtn) {
@@ -275,6 +314,11 @@ function setupEventListeners() {
   if (closeModalBtn) closeModalBtn.addEventListener("click", closeTaskModal);
   const cancelModalBtn = document.getElementById("cancelTaskModalBtn");
   if (cancelModalBtn) cancelModalBtn.addEventListener("click", closeTaskModal);
+
+  const manualFetchMailBtn = document.getElementById("manualFetchMailBtn");
+  if (manualFetchMailBtn) {
+    manualFetchMailBtn.addEventListener("click", () => fetchOutlookEmails(true));
+  }
 
   const taskForm = document.getElementById("createTaskForm");
   if (taskForm) {
@@ -480,13 +524,125 @@ async function fetchFromBackend() {
       }));
     }
 
-    // 5. Fetch Outlook Calendar
+    // 5. Sync Outlook Mode & Connection Status
+    const modeRes = await apiRequest("/api/outlook/mode");
+    if (modeRes) {
+      state.outlookMode = modeRes.mode;
+      state.outlookConnected = Boolean(modeRes.connected);
+      state.outlookAccount = modeRes.account_name || null;
+      state.outlookError = modeRes.error || null;
+      updateOutlookStatusPills();
+    }
+
+    // 6. Fetch Outlook Calendar
     await fetchOutlookCalendar(state.calendarDaysAhead);
 
     saveState();
     renderAll();
   } catch (err) {
     console.warn("[AuraWork Sync] Failed loading backend data:", err);
+  }
+}
+
+export function updateOutlookStatusPills() {
+  const calPill = document.getElementById("sidebarOutlookCalPill");
+  const mailPill = document.getElementById("sidebarOutlookMailPill");
+  const calDot = document.getElementById("outlookCalDot");
+  const mailDot = document.getElementById("outlookMailDot");
+  const calStatusText = document.getElementById("outlookCalStatusText");
+  const mailStatusText = document.getElementById("outlookMailStatusText");
+  const modeLiveRadio = document.getElementById("modeLiveRadio");
+  const modeMockRadio = document.getElementById("modeMockRadio");
+
+  if (modeLiveRadio && modeMockRadio) {
+    modeLiveRadio.checked = (state.outlookMode === "live");
+    modeMockRadio.checked = (state.outlookMode === "mock");
+  }
+
+  const isLive = state.outlookMode === "live";
+  const isConnected = state.outlookConnected;
+
+  [calPill, mailPill].forEach(pill => {
+    if (!pill) return;
+    pill.classList.remove("online", "error", "mock");
+    if (isLive) {
+      pill.classList.add(isConnected ? "online" : "error");
+    } else {
+      pill.classList.add("mock");
+    }
+  });
+
+  const label = isLive 
+    ? (isConnected ? "Live (Connected)" : "Offline (Error)")
+    : "Mock Mode";
+
+  if (calStatusText) calStatusText.textContent = label;
+  if (mailStatusText) mailStatusText.textContent = label;
+}
+
+export async function setOutlookMode(newMode) {
+  try {
+    const res = await apiRequest("/api/outlook/mode", "POST", { mode: newMode });
+    if (res) {
+      state.outlookMode = res.mode;
+      state.outlookConnected = Boolean(res.connected);
+      state.outlookAccount = res.account_name || null;
+      state.outlookError = res.error || null;
+      saveState();
+      updateOutlookStatusPills();
+
+      if (newMode === "live") {
+        if (res.connected) {
+          showToast(`Switched to Live Outlook Mode (Account: ${res.account_name || 'Active'})`);
+        } else {
+          showToast(`Switched to Live Mode: Outlook unreachable (${res.error || 'Check Outlook'})`, "error");
+          logAiAction("OUTLOOK_MODE_CHANGE", `Switched to Live Outlook Mode: Unreachable (${res.error})`, {
+            type: "MODE_CHANGE",
+            mode: "live",
+            connected: false,
+            error: res.error
+          });
+        }
+      } else {
+        showToast("Switched to Mock / Simulated Outlook Mode");
+        logAiAction("OUTLOOK_MODE_CHANGE", "Switched to Mock / Simulated Outlook Mode", {
+          type: "MODE_CHANGE",
+          mode: "mock",
+          connected: false
+        });
+      }
+
+      renderAll();
+    }
+  } catch (err) {
+    showToast("Error updating Outlook mode", "error");
+  }
+}
+
+export async function testOutlookConnection() {
+  showToast("Testing connection to Outlook desktop via MAPI...");
+  try {
+    const res = await apiRequest("/api/outlook/mode");
+    if (res) {
+      state.outlookConnected = Boolean(res.connected);
+      state.outlookAccount = res.account_name || null;
+      state.outlookError = res.error || null;
+      updateOutlookStatusPills();
+
+      if (res.connected) {
+        showToast(`Outlook Connected! Account: ${res.account_name || 'Active'}`);
+      } else {
+        showToast(`Outlook Connection Failed: ${res.error || 'Desktop application closed'}`, "error");
+        logAiAction("OUTLOOK_TEST_FAILED", `Manual connection test failed: ${res.error || 'Application closed'}`, {
+          type: "CONNECTION_FAILURE",
+          mode: res.mode,
+          error: res.error
+        });
+      }
+      renderAll();
+    }
+  } catch (err) {
+    showToast("Failed to test Outlook connection", "error");
   }
 }
 
@@ -519,7 +675,11 @@ window.aurawork = {
   openTaskModal,
   closeTaskModal,
   openCleanDbModal,
-  closeCleanDbModal
+  closeCleanDbModal,
+  fetchOutlookEmails,
+  setOutlookMode,
+  testOutlookConnection,
+  updateOutlookStatusPills
 };
 
 // Also expose legacy top-level window aliases so inline onclicks continue seamlessly
@@ -532,4 +692,10 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   renderAll();
   fetchFromBackend();
+
+  // Automated 5-minute background mail polling
+  setInterval(() => {
+    fetchOutlookEmails(false);
+  }, 5 * 60 * 1000);
 });
+

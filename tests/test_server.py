@@ -1,14 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from server import app
+from server import app, mapi_service
 import database as db
 
 client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_db_before_tests():
-    """Ensure clean initial seed data for each test run."""
+    """Ensure clean initial seed data and default mock mode for each test run."""
     db.init_db(force_reset=True)
+    mapi_service.set_mode("mock")
+    db.set_setting("outlook_mode", "mock")
 
 def test_system_health_with_sqlite():
     """Verify system health reports SQLite active."""
@@ -158,13 +160,55 @@ def test_database_backup_and_clean():
     post_tasks = client.get("/api/tasks").json()
     assert len(post_tasks) == 0
 
-    # Verify mock calendar is also cleaned
+    # Verify mock calendar and inbox are also cleaned
     clean_cal = client.get("/api/outlook/calendar").json()
     assert len(clean_cal) == 0
+    clean_inbox = client.get("/api/outlook/inbox").json()
+    assert len(clean_inbox) == 0
 
     # Restore seeds for other tests
     reset_res = client.post("/api/database/reset")
     assert reset_res.status_code == 200
     assert len(client.get("/api/tasks").json()) > 0
     assert len(client.get("/api/outlook/calendar").json()) > 0
+    assert len(client.get("/api/outlook/inbox").json()) > 0
+
+
+def test_outlook_mode_and_live_error_handling():
+    """Verify Outlook mode switching, persistence, and live error raising when Outlook is disconnected."""
+    # Check default/current mode
+    mode_res = client.get("/api/outlook/mode")
+    assert mode_res.status_code == 200
+    data = mode_res.json()
+    assert "mode" in data
+    assert "connected" in data
+
+    # Switch to live mode
+    set_live = client.post("/api/outlook/mode", json={"mode": "live"})
+    assert set_live.status_code == 200
+    live_data = set_live.json()
+    assert live_data["mode"] == "live"
+
+    # In test environment without Outlook open, live mode endpoints MUST raise 503 instead of falling back
+    if not live_data["connected"]:
+        inbox_err = client.get("/api/outlook/inbox")
+        assert inbox_err.status_code == 503
+        cal_err = client.get("/api/outlook/calendar")
+        assert cal_err.status_code == 503
+        archive_err = client.post("/api/outlook/archive", json={"entry_ids": ["test-id"]})
+        assert archive_err.status_code == 503
+
+    # Switch back to mock mode
+    set_mock = client.post("/api/outlook/mode", json={"mode": "mock"})
+    assert set_mock.status_code == 200
+    mock_data = set_mock.json()
+    assert mock_data["mode"] == "mock"
+    assert mock_data["connected"] is True
+
+    # In mock mode, endpoints succeed without error
+    inbox_ok = client.get("/api/outlook/inbox")
+    assert inbox_ok.status_code == 200
+    cal_ok = client.get("/api/outlook/calendar")
+    assert cal_ok.status_code == 200
+
 

@@ -94,6 +94,12 @@ def init_db(force_reset: bool = False, seed_dummy: bool = True):
             parameters_json TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     conn.commit()
 
@@ -103,6 +109,24 @@ def init_db(force_reset: bool = False, seed_dummy: bool = True):
         if cursor.fetchone()[0] == 0:
             _seed_initial_data(conn)
 
+    conn.close()
+
+
+def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_setting(key: str, value: str):
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO app_settings (key, value, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    """, (key, value))
+    conn.commit()
     conn.close()
 
 

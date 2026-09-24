@@ -34,11 +34,68 @@ class OutlookMapiService:
     OL_FOLDER_CONTACTS = 10
     OL_FOLDER_ARCHIVE = 100  # Fallback custom search if not default
 
-    def __init__(self, use_mock_fallback: bool = True):
-        self.use_mock_fallback = use_mock_fallback
+    def __init__(self, mode: str = "mock"):
+        # "live" for productive Outlook connection (raises errors if unavailable)
+        # "mock" for simulated development/testing
+        self.mode = mode.lower() if mode in ("live", "mock") else "mock"
         self._outlook = None
         self._namespace = None
         self._mock_calendar_cleared = False
+        self._mock_inbox_cleared = False
+
+    def get_mode(self) -> str:
+        return self.mode
+
+    def set_mode(self, mode: str):
+        if mode not in ("live", "mock"):
+            raise ValueError("Mode must be 'live' or 'mock'")
+        self.mode = mode
+        if mode == "live":
+            # Reset cached namespace so it verifies freshly
+            self._namespace = None
+            self._outlook = None
+
+    def check_connection(self) -> Dict[str, Any]:
+        """
+        Tests the connection to Outlook MAPI.
+        Returns connection details and status.
+        """
+        if self.mode == "mock":
+            return {
+                "mode": "mock",
+                "connected": True,
+                "pywin32_available": HAS_WIN32COM,
+                "account_name": "Simulated Local Mock",
+                "error": None
+            }
+
+        if not HAS_WIN32COM:
+            return {
+                "mode": self.mode,
+                "connected": False,
+                "pywin32_available": False,
+                "error": "pywin32 library is not available or non-Windows system"
+            }
+
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            ns = outlook.GetNamespace("MAPI")
+            current_user = getattr(ns, "CurrentUser", None)
+            user_name = getattr(current_user, "Name", "Unknown") if current_user else "Authenticated User"
+            return {
+                "mode": self.mode,
+                "connected": True,
+                "pywin32_available": True,
+                "account_name": user_name,
+                "error": None
+            }
+        except Exception as e:
+            return {
+                "mode": self.mode,
+                "connected": False,
+                "pywin32_available": True,
+                "error": str(e)
+            }
 
     def clear_mock_calendar(self):
         """Clears mock calendar events when cleaning prototype data."""
@@ -48,27 +105,40 @@ class OutlookMapiService:
         """Restores mock calendar events when loading demo data."""
         self._mock_calendar_cleared = False
 
+    def clear_mock_inbox(self):
+        """Clears mock inbox messages when cleaning prototype data."""
+        self._mock_inbox_cleared = True
+
+    def reset_mock_inbox(self):
+        """Restores mock inbox messages when loading demo data."""
+        self._mock_inbox_cleared = False
+
     def _get_namespace(self):
-        """Initializes and returns the MAPI namespace."""
-        if not HAS_WIN32COM:
+        """Initializes and returns the MAPI namespace, or raises error in live mode."""
+        if self.mode == "mock":
             return None
+
+        if not HAS_WIN32COM:
+            raise RuntimeError("pywin32 COM automation is unavailable on this system")
+
         if self._namespace is None:
             try:
                 self._outlook = win32com.client.Dispatch("Outlook.Application")
                 self._namespace = self._outlook.GetNamespace("MAPI")
             except Exception as e:
-                if not self.use_mock_fallback:
-                    raise RuntimeError(f"Failed to connect to local Outlook via MAPI: {e}")
-                return None
+                raise RuntimeError(f"Failed to connect to local Outlook via MAPI: {e}")
         return self._namespace
 
     def get_inbox_messages(self, limit: int = 50, unread_only: bool = False) -> List[Dict[str, Any]]:
         """
         Retrieves recent emails from the Outlook Inbox.
+        In 'live' mode: connects to Outlook MAPI and raises error if unavailable.
+        In 'mock' mode: returns simulated inbox messages.
         """
-        ns = self._get_namespace()
-        if ns is None:
+        if self.mode == "mock":
             return self._mock_inbox_messages()
+
+        ns = self._get_namespace()
 
         try:
             inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
@@ -107,7 +177,7 @@ class OutlookMapiService:
 
             return results
         except Exception as e:
-            if self.use_mock_fallback:
+            if self.mode == "mock":
                 return self._mock_inbox_messages()
             raise RuntimeError(f"Error accessing Outlook inbox: {e}")
 
@@ -119,8 +189,8 @@ class OutlookMapiService:
     ) -> List[Dict[str, Any]]:
         """
         Retrieves meetings and events from Outlook Calendar for a given date range.
-        If start_date is not provided, defaults to today.
-        If end_date is not provided, calculates end_date based on start_date + (days - 1).
+        In 'live' mode: connects to Outlook MAPI and raises error if unavailable.
+        In 'mock' mode: returns simulated calendar events.
         """
         from datetime import timedelta
 
@@ -131,10 +201,10 @@ class OutlookMapiService:
             days = max(1, days)
             end_date = start_date + timedelta(days=days - 1)
 
-        ns = self._get_namespace()
-        if ns is None:
+        if self.mode == "mock":
             return self._mock_calendar_events(start_date, end_date)
 
+        ns = self._get_namespace()
         try:
             calendar = ns.GetDefaultFolder(self.OL_FOLDER_CALENDAR)
             items = calendar.Items
@@ -170,7 +240,7 @@ class OutlookMapiService:
 
             return events
         except Exception as e:
-            if self.use_mock_fallback:
+            if self.mode == "mock":
                 return self._mock_calendar_events(start_date, end_date)
             raise RuntimeError(f"Error accessing Outlook calendar: {e}")
 
@@ -264,6 +334,8 @@ class OutlookMapiService:
 
     # Fallbacks for dev machines where Outlook desktop is not running
     def _mock_inbox_messages(self) -> List[Dict[str, Any]]:
+        if self._mock_inbox_cleared:
+            return []
         return [
             {
                 "entry_id": "msg-mock-1",

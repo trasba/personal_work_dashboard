@@ -18,10 +18,14 @@ import database as db
 # Initialize database on startup
 db.init_db()
 
+# Load saved outlook mode from SQLite settings (default to "mock" for safe initial setup, user can toggle to "live")
+saved_mode = db.get_setting("outlook_mode", "mock")
+mapi_service = OutlookMapiService(mode=saved_mode)
+
 app = FastAPI(
     title="AuraWork AI Dashboard & Outlook MAPI Service",
     description="Backend API with SQLite storage connecting AuraWork dashboard to local Windows Outlook via MAPI.",
-    version="1.1.0",
+    version="1.2.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -34,9 +38,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-mapi_service = OutlookMapiService(use_mock_fallback=True)
-
 # --- Pydantic Schemas ---
+class OutlookModeRequest(BaseModel):
+    mode: str = Field(..., pattern="^(live|mock)$")
+
+class OutlookModeResponse(BaseModel):
+    mode: str
+    connected: bool
+    pywin32_available: bool
+    account_name: Optional[str] = None
+    error: Optional[str] = None
 class TaskModel(BaseModel):
     id: str
     title: str
@@ -125,6 +136,8 @@ class SystemHealthResponse(BaseModel):
     status: str
     platform: str
     pywin32_available: bool
+    outlook_mode: str
+    outlook_connected: bool
     outlook_connection: str
     database: str
 
@@ -133,13 +146,29 @@ class SystemHealthResponse(BaseModel):
 @app.get("/api/health", response_model=SystemHealthResponse, tags=["System"])
 def get_system_health():
     import sys
+    conn_info = mapi_service.check_connection()
     return {
         "status": "healthy",
         "platform": sys.platform,
         "pywin32_available": HAS_WIN32COM,
-        "outlook_connection": "live_mapi" if HAS_WIN32COM else "mock_fallback",
+        "outlook_mode": mapi_service.get_mode(),
+        "outlook_connected": conn_info["connected"],
+        "outlook_connection": f"{mapi_service.get_mode()}_mode",
         "database": "sqlite3_active"
     }
+
+@app.get("/api/outlook/mode", response_model=OutlookModeResponse, tags=["Outlook MAPI"])
+def get_outlook_mode():
+    """Returns current Outlook mode ('live' or 'mock') and connection health."""
+    conn_info = mapi_service.check_connection()
+    return conn_info
+
+@app.post("/api/outlook/mode", response_model=OutlookModeResponse, tags=["Outlook MAPI"])
+def set_outlook_mode(payload: OutlookModeRequest):
+    """Sets Outlook mode to 'live' or 'mock' and persists choice in SQLite settings."""
+    mapi_service.set_mode(payload.mode)
+    db.set_setting("outlook_mode", payload.mode)
+    return mapi_service.check_connection()
 
 @app.post("/api/database/reset", tags=["System"])
 def reset_database(seed: bool = True):
@@ -147,8 +176,10 @@ def reset_database(seed: bool = True):
     db.init_db(force_reset=True, seed_dummy=seed)
     if seed:
         mapi_service.reset_mock_calendar()
+        mapi_service.reset_mock_inbox()
     else:
         mapi_service.clear_mock_calendar()
+        mapi_service.clear_mock_inbox()
     return {"success": True, "message": "Database reset to initial demo seeds" if seed else "Database reset to clean schema"}
 
 @app.post("/api/database/clean", tags=["System"])
@@ -156,6 +187,7 @@ def clean_database():
     """Wipes all tasks, followups, audit logs and rules with an automatic timestamped backup."""
     result = db.clear_all_data(create_backup_first=True)
     mapi_service.clear_mock_calendar()
+    mapi_service.clear_mock_inbox()
     return result
 
 @app.post("/api/database/backup", tags=["System"])
@@ -282,7 +314,8 @@ def get_outlook_inbox(
     try:
         return mapi_service.get_inbox_messages(limit=limit, unread_only=unread_only)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        status_code = 503 if mapi_service.get_mode() == "live" else 500
+        raise HTTPException(status_code=status_code, detail=f"Outlook MAPI error ({mapi_service.get_mode()} mode): {e}")
 
 @app.get("/api/outlook/calendar", response_model=List[CalendarEventItem], tags=["Outlook MAPI"])
 def get_outlook_calendar(
@@ -298,21 +331,24 @@ def get_outlook_calendar(
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"Invalid date format: {ve}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        status_code = 503 if mapi_service.get_mode() == "live" else 500
+        raise HTTPException(status_code=status_code, detail=f"Outlook MAPI error ({mapi_service.get_mode()} mode): {e}")
 
 @app.post("/api/outlook/archive", response_model=BulkArchiveResponse, tags=["Outlook MAPI"])
 def bulk_archive_messages(payload: BulkArchiveRequest):
     try:
         return mapi_service.archive_messages(payload.entry_ids)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        status_code = 503 if mapi_service.get_mode() == "live" else 500
+        raise HTTPException(status_code=status_code, detail=f"Outlook MAPI error ({mapi_service.get_mode()} mode): {e}")
 
 @app.post("/api/outlook/restore", response_model=RestoreResponse, tags=["Outlook MAPI"])
 def restore_archived_messages(payload: RestoreRequest):
     try:
         return mapi_service.restore_messages_to_inbox(payload.entry_ids)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        status_code = 503 if mapi_service.get_mode() == "live" else 500
+        raise HTTPException(status_code=status_code, detail=f"Outlook MAPI error ({mapi_service.get_mode()} mode): {e}")
 
 
 # Static Frontend Mounting

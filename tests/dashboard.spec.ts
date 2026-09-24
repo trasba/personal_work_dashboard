@@ -102,9 +102,67 @@ test('Verify Productive Flow: Task Creation Modal, Outlook Calendar, Mailbox Cle
   await expect(page.locator('#timelineSlots')).toContainText("No events or time blocks scheduled");
   await expect(page.locator('.slot-card')).toHaveCount(0);
 
+  // Verify mailfeed is also cleaned up
+  await page.click('#nav-mailfeed');
+  await expect(page.locator('#mailFeedGridContainer')).toContainText("Mail feed is empty");
+  await expect(page.locator('.mailfeed-card')).toHaveCount(0);
+  await expect(page.locator('.bulk-category-card')).toHaveCount(0);
+
+  // Verify manual Fetch Emails button exists and functions
+  const fetchMailBtn = page.locator('#manualFetchMailBtn');
+  await expect(fetchMailBtn).toBeVisible();
+  await fetchMailBtn.click();
+  // Under mock fallback (when cleared), remains empty or updates status
+  await expect(page.locator('#mailSyncStatusText')).toBeVisible();
+
+  // 6. Test Outlook Mode Switching & Explicit Error Surfacing
+  await page.click('#dbSettingsBtn');
+  await expect(settingsMenu).toBeVisible();
+
+  // Verify mode radio buttons exist
+  const liveRadio = page.locator('#modeLiveRadio');
+  const mockRadio = page.locator('#modeMockRadio');
+  await expect(liveRadio).toBeVisible();
+  await expect(mockRadio).toBeVisible();
+
+  // Switch to Live Outlook mode
+  const [modeResponse] = await Promise.all([
+    page.waitForResponse(res => res.url().includes('/api/outlook/mode') && res.request().method() === 'POST'),
+    liveRadio.click()
+  ]);
+  expect(modeResponse.status()).toBe(200);
+  await expect(liveRadio).toBeChecked();
+
+  // Test Connection button
+  const testConnBtn = page.locator('#testOutlookConnBtn');
+  await expect(testConnBtn).toBeVisible();
+  await testConnBtn.click();
+
+  // Trigger manual fetch in live mode without Outlook open - must raise error / surface failure
+  await fetchMailBtn.click();
+  await expect(page.locator('#outlookMailStatusText')).toContainText('Error');
+  await expect(page.locator('#sidebarOutlookMailPill.error')).toBeVisible();
+
+  // Verify Audit Log records the connection error
+  await page.click('#nav-auditlog');
+  await expect(page.locator('.audit-log-row:has-text("OUTLOOK_MAIL_ERROR")').first()).toBeVisible();
+
+  // Switch back to Mock mode
+  await page.click('#dbSettingsBtn');
+  await mockRadio.check();
+  await expect(mockRadio).toBeChecked();
+
   // Single static screenshot for layout verification
   await page.screenshot({ path: 'productive-clean-dashboard.png' });
 
-  expect(errors).toEqual([]);
+  // On test machines without Outlook desktop, live MAPI calls are expected to produce 500/503 network errors
+  const fatalErrors = errors.filter(e => 
+    !e.includes("Outlook MAPI error") && 
+    !e.includes("503") && 
+    !e.includes("500") && 
+    !e.includes("Internal Server Error")
+  );
+  expect(fatalErrors).toEqual([]);
 });
+
 

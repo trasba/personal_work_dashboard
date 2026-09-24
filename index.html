@@ -51,15 +51,15 @@
 
       <div class="sidebar-integrations">
         <div class="section-label">CONNECTED SOURCES</div>
-        <div class="integration-pill online">
-          <span class="dot"></span>
+        <div class="integration-pill" id="sidebarOutlookCalPill">
+          <span class="dot" id="outlookCalDot"></span>
           <span class="int-name">Outlook Calendar</span>
-          <span class="int-status">Active</span>
+          <span class="int-status" id="outlookCalStatusText">Live</span>
         </div>
-        <div class="integration-pill online">
-          <span class="dot"></span>
+        <div class="integration-pill" id="sidebarOutlookMailPill">
+          <span class="dot" id="outlookMailDot"></span>
           <span class="int-name">Outlook Mailbox</span>
-          <span class="int-status">Active</span>
+          <span class="int-status" id="outlookMailStatusText">Live</span>
         </div>
         <div class="integration-pill online">
           <span class="dot" style="background: #818cf8; box-shadow: 0 0 6px rgba(129, 140, 248, 0.6);"></span>
@@ -120,6 +120,29 @@
               <span>Settings</span>
             </button>
             <div class="settings-dropdown-menu" id="settingsDropdownMenu" style="display: none;">
+              <div class="dropdown-header-title">OUTLOOK CONNECTOR MODE</div>
+              <div class="outlook-mode-selector">
+                <label class="mode-radio-label">
+                  <input type="radio" name="outlookModeOption" value="live" id="modeLiveRadio">
+                  <div>
+                    <span class="mode-name">Live Outlook (Productive)</span>
+                    <span class="mode-hint">Requires Outlook desktop running via MAPI. Fails explicitly if unreachable.</span>
+                  </div>
+                </label>
+                <label class="mode-radio-label">
+                  <input type="radio" name="outlookModeOption" value="mock" id="modeMockRadio">
+                  <div>
+                    <span class="mode-name">Mock / Simulated (Testing)</span>
+                    <span class="mode-hint">Uses internal demo data for testing on machines without Outlook.</span>
+                  </div>
+                </label>
+              </div>
+              <button class="dropdown-item" id="testOutlookConnBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span>Test Outlook Connection</span>
+              </button>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-header-title">DATABASE & DATA</div>
               <button class="dropdown-item danger" id="cleanDbOptionBtn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 <span>Clear All Data (Auto-Backup)</span>
@@ -128,7 +151,6 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span>Create Database Backup</span>
               </button>
-              <div class="dropdown-divider"></div>
               <button class="dropdown-item" id="loadDemoDataBtn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 <span>Load Sample Demo Data</span>
@@ -381,8 +403,15 @@
             <h2 class="view-heading">AI Mailbox & Smart Outlook Assistant</h2>
             <p class="view-subheading">Extract actionable tasks from incoming threads, safely clean low-signal emails, and train the AI memory rules.</p>
           </div>
-          <div class="sync-status-badge">
-            <span class="dot-live"></span> Connected to Outlook & Gmail • Last polled 2m ago
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="manualFetchMailBtn" title="Check Outlook inbox now">
+              <svg id="fetchMailSpinIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+              <span>Fetch Emails</span>
+            </button>
+            <div class="sync-status-badge">
+              <span class="dot-live"></span>
+              <span id="mailSyncStatusText">Connected to Outlook • Auto-polls every 5m</span>
+            </div>
           </div>
         </div>
 

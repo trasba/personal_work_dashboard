@@ -392,7 +392,11 @@ export const state = {
   auditLog: JSON.parse(localStorage.getItem("aurawork_v4_audit_log")) || INITIAL_AUDIT_LOG,
   currentView: "dayflow",
   calendarDaysAhead: 1,
-  isBackendConnected: false
+  isBackendConnected: false,
+  outlookMode: localStorage.getItem("aurawork_v4_outlook_mode") || "mock",
+  outlookConnected: false,
+  outlookAccount: null,
+  outlookError: null
 };
 
 export function saveState() {
@@ -403,6 +407,7 @@ export function saveState() {
   localStorage.setItem("aurawork_v4_archive_batches", JSON.stringify(state.archiveBatches));
   localStorage.setItem("aurawork_v4_learned_rules", JSON.stringify(state.learnedRules));
   localStorage.setItem("aurawork_v4_audit_log", JSON.stringify(state.auditLog));
+  localStorage.setItem("aurawork_v4_outlook_mode", state.outlookMode);
 }
 
 export function resetLocalState() {
@@ -420,6 +425,8 @@ export function clearLocalState() {
   state.tasks = [];
   state.followups = [];
   state.scheduleSlots = [];
+  state.inboundEmails = [];
+  state.archiveBatches = [];
   state.learnedRules = [];
   state.auditLog = [];
   saveState();

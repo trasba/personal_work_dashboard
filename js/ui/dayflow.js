@@ -6,6 +6,7 @@ import { state, saveState } from "../state.js";
 import { apiRequest } from "../api.js";
 import { showToast, escapeHtml } from "./toast.js";
 import { renderMetrics } from "./metrics.js";
+import { logAiAction } from "../ai-engine.js";
 
 export function renderDayFlowTasks() {
   const container = document.getElementById("taskListContainer");
@@ -157,6 +158,14 @@ export async function fetchOutlookCalendar(days = 1) {
     renderMetrics();
   } catch (e) {
     console.warn("[AuraWork] Error loading Outlook calendar:", e);
+    if (state.outlookMode === "live") {
+      showToast("Outlook Calendar unreachable: Ensure Outlook desktop is open", "error");
+      await logAiAction("OUTLOOK_CALENDAR_ERROR", `Failed to read calendar in Live mode: ${e.message || 'MAPI unavailable'}`, {
+        type: "CONNECTION_FAILURE",
+        source: "calendar",
+        error: String(e)
+      });
+    }
   }
 }
 
