@@ -130,8 +130,9 @@ class OutlookMapiService:
     def get_inbox_messages(self, limit: int = 50, unread_only: bool = False) -> List[Dict[str, Any]]:
         """
         Retrieves recent emails from the Outlook Inbox.
-        Optimized: Caches headers via SetColumns and avoids reading .Body upfront
-        to achieve instantaneous listing without MIME/SMIME decryption delays.
+        Optimized: Uses native MAPI Table (inbox.GetTable & GetArray) to transfer
+        headers in a single inter-process COM batch, eliminating slow per-item RPC roundtrips.
+        Falls back to Items enumeration if GetTable is unavailable.
         """
         if self.mode == "mock":
             return self._mock_inbox_messages()
@@ -139,6 +140,47 @@ class OutlookMapiService:
         try:
             with self._mapi_session() as ns:
                 inbox = ns.GetDefaultFolder(self.OL_FOLDER_INBOX)
+
+                # Fast path: Outlook Table API (single COM batch transfer)
+                try:
+                    filter_str = "[UnRead] = true" if unread_only else ""
+                    table = inbox.GetTable(filter_str) if filter_str else inbox.GetTable()
+                    table.Sort("[ReceivedTime]", True)
+                    table.Columns.RemoveAll()
+                    table.Columns.Add("EntryID")
+                    table.Columns.Add("Subject")
+                    table.Columns.Add("SenderName")
+                    table.Columns.Add("SenderEmailAddress")
+                    table.Columns.Add("ReceivedTime")
+                    table.Columns.Add("UnRead")
+
+                    rows = table.GetArray(limit)
+                    results = []
+                    if rows:
+                        for row in rows:
+                            entry_id = str(row[0]) if row[0] is not None else ""
+                            subject = str(row[1]) if row[1] is not None else "(No Subject)"
+                            sender = str(row[2]) if row[2] is not None else ""
+                            sender_email = str(row[3]) if row[3] is not None else ""
+                            if sender_email and (sender_email.startswith("/") or "/cn=" in sender_email.lower()):
+                                sender_email = ""
+                            received_time = str(row[4]) if row[4] is not None else ""
+                            unread = bool(row[5]) if row[5] is not None else False
+
+                            results.append({
+                                "entry_id": entry_id,
+                                "subject": subject,
+                                "sender_name": sender,
+                                "sender_email": sender_email,
+                                "received_time": received_time,
+                                "unread": unread,
+                                "body_snippet": ""  # Loaded on-demand when user clicks AI Summarize / View
+                            })
+                    return results
+                except Exception:
+                    # Fallback path: Items enumeration if Table API fails on older MAPI providers
+                    pass
+
                 messages = inbox.Items
                 messages.Sort("[ReceivedTime]", True)
 
