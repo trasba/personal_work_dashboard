@@ -100,6 +100,19 @@ def init_db(force_reset: bool = False, seed_dummy: bool = True):
             value TEXT NOT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS email_ai_summaries (
+            entry_id TEXT PRIMARY KEY,
+            subject TEXT NOT NULL,
+            sender TEXT NOT NULL,
+            received_time TEXT,
+            summary TEXT NOT NULL,
+            action_items_json TEXT NOT NULL DEFAULT '[]',
+            suggested_task TEXT NOT NULL,
+            suggested_duration INTEGER NOT NULL DEFAULT 30,
+            urgency TEXT NOT NULL DEFAULT 'medium',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     conn.commit()
 
@@ -146,6 +159,7 @@ def clear_all_data(create_backup_first: bool = True) -> Dict[str, Any]:
         DELETE FROM followups;
         DELETE FROM audit_log;
         DELETE FROM ai_memory_rules;
+        DELETE FROM email_ai_summaries;
     """)
     conn.commit()
     conn.close()
@@ -362,3 +376,88 @@ def update_audit_status(log_id: str, new_status: str) -> bool:
     updated = cursor.rowcount > 0
     conn.close()
     return updated
+
+
+# --- Email AI Summaries Operations ---
+def save_email_summary(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Saves or updates an AI email summary in the local database."""
+    conn = get_connection()
+    action_items_json = json.dumps(data.get("action_items", []))
+    conn.execute("""
+        INSERT INTO email_ai_summaries (
+            entry_id, subject, sender, received_time, summary,
+            action_items_json, suggested_task, suggested_duration, urgency, created_at
+        ) VALUES (
+            :entry_id, :subject, :sender, :received_time, :summary,
+            :action_items_json, :suggested_task, :suggested_duration, :urgency, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT(entry_id) DO UPDATE SET
+            subject = excluded.subject,
+            sender = excluded.sender,
+            received_time = excluded.received_time,
+            summary = excluded.summary,
+            action_items_json = excluded.action_items_json,
+            suggested_task = excluded.suggested_task,
+            suggested_duration = excluded.suggested_duration,
+            urgency = excluded.urgency,
+            created_at = CURRENT_TIMESTAMP
+    """, {
+        "entry_id": data["entry_id"],
+        "subject": data.get("subject", ""),
+        "sender": data.get("sender", ""),
+        "received_time": data.get("received_time", ""),
+        "summary": data.get("summary", ""),
+        "action_items_json": action_items_json,
+        "suggested_task": data.get("suggested_task", ""),
+        "suggested_duration": int(data.get("suggested_duration", 30)),
+        "urgency": data.get("urgency", "medium")
+    })
+    conn.commit()
+    conn.close()
+    
+    # Return formatted result with action_items as list
+    result = dict(data)
+    if "action_items" not in result:
+        result["action_items"] = []
+    return result
+
+
+def get_email_summary(entry_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves an AI email summary by entry_id."""
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM email_ai_summaries WHERE entry_id = ?", (entry_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    try:
+        d["action_items"] = json.loads(d["action_items_json"])
+    except Exception:
+        d["action_items"] = []
+    return d
+
+
+def get_all_email_summaries() -> List[Dict[str, Any]]:
+    """Retrieves all cached email AI summaries ordered by creation time."""
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM email_ai_summaries ORDER BY created_at DESC").fetchall()
+    conn.close()
+    results = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["action_items"] = json.loads(d["action_items_json"])
+        except Exception:
+            d["action_items"] = []
+        results.append(d)
+    return results
+
+
+def delete_email_summary(entry_id: str) -> bool:
+    """Removes a cached email summary."""
+    conn = get_connection()
+    cursor = conn.execute("DELETE FROM email_ai_summaries WHERE entry_id = ?", (entry_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted

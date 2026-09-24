@@ -34,15 +34,35 @@ export function renderMailFeedView() {
 
   container.innerHTML = state.inboundEmails.map(mail => {
     const isAiProcessed = Boolean(mail.suggestedTask);
+    
+    let actionItemsHtml = "";
+    if (mail.actionItems && Array.isArray(mail.actionItems) && mail.actionItems.length > 0) {
+      actionItemsHtml = `
+        <div class="ai-actions-checklist">
+          ${mail.actionItems.map(item => `
+            <div class="ai-action-item">
+              <span class="ai-action-bullet">›</span>
+              <span>${escapeHtml(item)}</span>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
     const aiBoxHtml = isAiProcessed ? `
       <div class="ai-extraction-box">
-        <span class="ai-ext-title">AI ACTION RECOMMENDATION:</span>
+        <span class="ai-ext-title">✨ AI SUMMARY & ACTION RECOMMENDATION:</span>
         <span class="ai-ext-desc">"${escapeHtml(mail.suggestedTask)}" (${mail.duration || 30}m)</span>
+        ${mail.aiSummary ? `<div style="font-size: 0.77rem; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(mail.aiSummary)}</div>` : ''}
+        ${actionItemsHtml}
       </div>
     ` : `
       <div class="raw-email-indicator">
         <span class="raw-dot"></span>
-        <span class="raw-text">Raw incoming message • Not processed by AI</span>
+        <span class="raw-text">Raw message • Not processed by AI</span>
+        <button class="mail-summarize-btn" id="btn-summarize-${mail.id}" onclick="window.aurawork.summarizeSingleEmail('${mail.id}')" title="Run AI on this email">
+          <span>✨ AI Summarize</span>
+        </button>
       </div>
     `;
 
@@ -57,7 +77,7 @@ export function renderMailFeedView() {
     `;
 
     return `
-      <div class="mailfeed-card">
+      <div class="mailfeed-card" id="card-${mail.id}">
         <div class="mailfeed-header">
           <div class="mail-sender-box">
             <span class="mail-sender-name">${escapeHtml(mail.sender)}</span>
@@ -72,7 +92,12 @@ export function renderMailFeedView() {
 
         <div class="mail-card-footer">
           ${addActionBtn}
-          <div style="display: flex; gap: 6px;">
+          <div style="display: flex; gap: 6px; align-items: center;">
+            ${isAiProcessed ? `
+              <button class="mail-summarize-btn" onclick="window.aurawork.summarizeSingleEmail('${mail.id}', true)" title="Re-run AI extraction" style="padding: 3px 7px; font-size: 0.68rem;">
+                ↻ Re-run
+              </button>
+            ` : ''}
             <button class="teach-rule-btn" onclick="window.aurawork.teachEmailCleanUp('${mail.id}', 'sender')" title="Teach AI to archive future emails from this sender">
               🧠 Learn Sender
             </button>
@@ -233,6 +258,9 @@ export async function fetchOutlookEmails(manual = false) {
         showToast(messages.length > 0 ? `Fetched ${messages.length} email(s) from Outlook` : "Inbox checked: No new emails");
       }
     }
+
+    // Hydrate any cached AI summaries from local SQLite
+    await hydrateCachedEmailSummaries();
   } catch (err) {
     console.warn("[AuraWork] Error fetching Outlook emails:", err);
     if (syncStatusEl) {
@@ -252,5 +280,88 @@ export async function fetchOutlookEmails(manual = false) {
     }
   } finally {
     if (fetchIcon) fetchIcon.classList.remove("spin");
+  }
+}
+
+/**
+ * Hydrates state.inboundEmails with any previously cached AI summaries stored in aurawork.db.
+ */
+export async function hydrateCachedEmailSummaries() {
+  try {
+    const cachedList = await apiRequest("/api/emails/summaries");
+    if (Array.isArray(cachedList) && cachedList.length > 0) {
+      const cacheMap = new Map(cachedList.map(item => [item.entry_id, item]));
+      let updated = false;
+
+      state.inboundEmails.forEach(email => {
+        if (cacheMap.has(email.id)) {
+          const cached = cacheMap.get(email.id);
+          email.suggestedTask = cached.suggested_task;
+          email.duration = cached.suggested_duration || 30;
+          email.priority = cached.urgency || email.priority;
+          email.urgencyText = cached.urgency ? `${cached.urgency.toUpperCase()} PRIORITY` : email.urgencyText;
+          email.aiSummary = cached.summary;
+          email.actionItems = cached.action_items || [];
+          updated = true;
+        }
+      });
+
+      if (updated) {
+        saveState();
+        renderMiniInboundDigest();
+        renderMailFeedView();
+      }
+    }
+  } catch (err) {
+    console.warn("[AuraWork] Could not hydrate cached email summaries:", err);
+  }
+}
+
+/**
+ * Manually calls the backend AI summarization endpoint for a single email.
+ * This can be triggered from the UI on dev (with mock data) or live (with real Outlook).
+ */
+export async function summarizeSingleEmail(emailId, forceRefresh = false) {
+  const email = state.inboundEmails.find(e => e.id === emailId);
+  if (!email) return;
+
+  const btn = document.getElementById(`btn-summarize-${emailId}`);
+  if (btn) {
+    btn.classList.add("loading");
+    btn.innerHTML = `<span style="display:inline-block; animation: spinIcon 1s linear infinite;">⏳</span> AI Thinking...`;
+  }
+
+  try {
+    const res = await apiRequest("/api/emails/summarize", "POST", {
+      entry_id: email.id,
+      subject: email.subject,
+      sender: email.sender,
+      body: email.snippet || "",
+      force_refresh: forceRefresh
+    });
+
+    if (res && res.entry_id) {
+      email.suggestedTask = res.suggested_task;
+      email.duration = res.suggested_duration || 30;
+      email.priority = res.urgency || "medium";
+      email.urgencyText = `${(res.urgency || 'MEDIUM').toUpperCase()} PRIORITY`;
+      email.aiSummary = res.summary;
+      email.actionItems = res.action_items || [];
+
+      saveState();
+      renderMiniInboundDigest();
+      renderMailFeedView();
+      renderMetrics();
+      showToast(`AI summarized: "${res.suggested_task}" (${res.suggested_duration}m)`);
+    } else {
+      showToast("AI summarization returned empty result", "warning");
+    }
+  } catch (err) {
+    console.error("[AuraWork] AI email summarization error:", err);
+    showToast(`AI summarization failed: ${err.message || 'Check server'}`, "error");
+  } finally {
+    if (btn) {
+      btn.classList.remove("loading");
+    }
   }
 }

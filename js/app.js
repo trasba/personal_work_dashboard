@@ -11,7 +11,7 @@ import { renderMetrics } from "./ui/metrics.js";
 import { renderDayFlowTasks, renderTimeline, fetchOutlookCalendar } from "./ui/dayflow.js";
 import { renderInventoryTiers, setTaskTier, toggleTaskCompletion, deleteTask, quickScheduleTask, unassignSlot } from "./ui/inventory.js";
 import { renderFollowups, pingFollowUp, resolveFollowUp, promptAddFollowUp } from "./ui/followups.js";
-import { renderMailFeedView, renderMiniInboundDigest, convertEmailToTask, dismissEmail, fetchOutlookEmails } from "./ui/mailfeed.js";
+import { renderMailFeedView, renderMiniInboundDigest, convertEmailToTask, dismissEmail, fetchOutlookEmails, summarizeSingleEmail, hydrateCachedEmailSummaries } from "./ui/mailfeed.js";
 import { renderBulkArchiveCockpit, toggleArchiveBatchSelection, executeBulkArchive } from "./ui/bulkarchive.js";
 import { renderAuditLogView } from "./ui/auditlog.js";
 import { logAiAction, runAutoSchedulingAI, runAiAutoTriage, teachAiCleanUpRule, teachEmailCleanUp, removeLearnedRule, revertAiAction } from "./ai-engine.js";
@@ -677,6 +677,8 @@ window.aurawork = {
   openCleanDbModal,
   closeCleanDbModal,
   fetchOutlookEmails,
+  summarizeSingleEmail,
+  hydrateCachedEmailSummaries,
   setOutlookMode,
   testOutlookConnection,
   updateOutlookStatusPills

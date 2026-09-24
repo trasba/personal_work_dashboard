@@ -130,8 +130,8 @@ class OutlookMapiService:
     def get_inbox_messages(self, limit: int = 50, unread_only: bool = False) -> List[Dict[str, Any]]:
         """
         Retrieves recent emails from the Outlook Inbox.
-        In 'live' mode: connects to Outlook MAPI and raises error if unavailable.
-        In 'mock' mode: returns simulated inbox messages.
+        Optimized: Caches headers via SetColumns and avoids reading .Body upfront
+        to achieve instantaneous listing without MIME/SMIME decryption delays.
         """
         if self.mode == "mock":
             return self._mock_inbox_messages()
@@ -142,22 +142,29 @@ class OutlookMapiService:
                 messages = inbox.Items
                 messages.Sort("[ReceivedTime]", True)
 
+                # SetColumns caches only the requested attributes in memory for fast iteration
+                try:
+                    messages.SetColumns("EntryID, Subject, SenderName, SenderEmailAddress, ReceivedTime, UnRead")
+                except Exception:
+                    # In case of older MAPI providers that do not support SetColumns
+                    pass
+
                 results = []
                 count = 0
                 for msg in messages:
                     if count >= limit:
                         break
                     try:
-                        if unread_only and not msg.UnRead:
+                        if unread_only and not getattr(msg, "UnRead", False):
                             continue
 
-                        entry_id = getattr(msg, "EntryID", f"mock-{count}")
+                        entry_id = getattr(msg, "EntryID", f"id-{count}")
                         subject = getattr(msg, "Subject", "(No Subject)")
                         sender = getattr(msg, "SenderName", "")
                         sender_email = getattr(msg, "SenderEmailAddress", "")
                         received_time = getattr(msg, "ReceivedTime", None)
-                        body_snippet = (getattr(msg, "Body", "") or "")[:200].replace("\r\n", " ").strip()
 
+                        # Omit upfront .Body access: keeps inbox listing instant
                         results.append({
                             "entry_id": entry_id,
                             "subject": subject,
@@ -165,7 +172,7 @@ class OutlookMapiService:
                             "sender_email": sender_email,
                             "received_time": str(received_time) if received_time else "",
                             "unread": bool(getattr(msg, "UnRead", False)),
-                            "body_snippet": body_snippet
+                            "body_snippet": ""  # Loaded on-demand when user clicks AI Summarize / View
                         })
                         count += 1
                     except Exception:
@@ -176,6 +183,51 @@ class OutlookMapiService:
             if self.mode == "mock":
                 return self._mock_inbox_messages()
             raise RuntimeError(f"Error accessing Outlook inbox: {e}")
+
+    def get_email_detail(self, entry_id: str) -> Dict[str, Any]:
+        """
+        Loads full email detail and body text on-demand for a single email by EntryID.
+        This prevents blocking the entire inbox fetch while allowing deep AI analysis.
+        """
+        if self.mode == "mock":
+            for m in self._mock_inbox_messages():
+                if m["entry_id"] == entry_id:
+                    return {
+                        "entry_id": m["entry_id"],
+                        "subject": m["subject"],
+                        "sender_name": m["sender_name"],
+                        "sender_email": m["sender_email"],
+                        "received_time": m["received_time"],
+                        "body": m.get("body_snippet", "")
+                    }
+            return {
+                "entry_id": entry_id,
+                "subject": "Mock Subject",
+                "sender_name": "Mock Sender",
+                "sender_email": "mock@example.com",
+                "received_time": datetime.now().isoformat(),
+                "body": "This is simulated email body content for on-demand analysis."
+            }
+
+        try:
+            with self._mapi_session() as ns:
+                item = ns.GetItemFromID(entry_id)
+                subject = getattr(item, "Subject", "(No Subject)")
+                sender = getattr(item, "SenderName", "")
+                sender_email = getattr(item, "SenderEmailAddress", "")
+                received_time = getattr(item, "ReceivedTime", None)
+                body = getattr(item, "Body", "") or ""
+
+                return {
+                    "entry_id": entry_id,
+                    "subject": subject,
+                    "sender_name": sender,
+                    "sender_email": sender_email,
+                    "received_time": str(received_time) if received_time else "",
+                    "body": body
+                }
+        except Exception as e:
+            raise RuntimeError(f"Error loading email details for ID {entry_id}: {e}")
 
     def get_calendar_events(
         self,

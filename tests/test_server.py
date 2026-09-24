@@ -212,3 +212,46 @@ def test_outlook_mode_and_live_error_handling():
     assert cal_ok.status_code == 200
 
 
+def test_email_summarization_mock_and_cache():
+    """Verify AI email summarization endpoint with mock data and local SQLite caching."""
+    # Ensure fresh state
+    client.post("/api/database/reset")
+
+    payload = {
+        "entry_id": "msg-test-summary-1",
+        "subject": "Action requested: Confirm revised contractor budget by 4pm",
+        "sender": "Marcus Vance (marcus.vance@company.com)",
+        "body": "Please review the attached contractor budget allocations and confirm approval by 4pm.",
+        "force_refresh": True
+    }
+
+    # 1. First summarization call
+    res = client.post("/api/emails/summarize", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["entry_id"] == "msg-test-summary-1"
+    assert data["urgency"] in ["urgent", "high", "medium"]
+    assert "contractor budget" in data["suggested_task"].lower() or "confirm" in data["suggested_task"].lower()
+    assert len(data["action_items"]) > 0
+    assert data["suggested_duration"] > 0
+    assert len(data["summary"]) > 0
+
+    # 2. Verify it is persisted in aurawork.db
+    get_res = client.get("/api/emails/summaries/msg-test-summary-1")
+    assert get_res.status_code == 200
+    cached = get_res.json()
+    assert cached["entry_id"] == "msg-test-summary-1"
+    assert cached["suggested_task"] == data["suggested_task"]
+
+    # 3. Verify get all summaries list endpoint
+    list_res = client.get("/api/emails/summaries")
+    assert list_res.status_code == 200
+    all_items = list_res.json()
+    assert any(item["entry_id"] == "msg-test-summary-1" for item in all_items)
+
+    # 4. Subsequent call without force_refresh returns cached record
+    repeat_res = client.post("/api/emails/summarize", json={"entry_id": "msg-test-summary-1"})
+    assert repeat_res.status_code == 200
+    assert repeat_res.json()["suggested_task"] == data["suggested_task"]
+
+

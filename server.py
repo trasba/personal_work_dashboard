@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 import os
 
 from outlook_mapi_service import OutlookMapiService, HAS_WIN32COM
@@ -140,6 +141,25 @@ class SystemHealthResponse(BaseModel):
     outlook_connected: bool
     outlook_connection: str
     database: str
+
+class EmailSummarizeRequest(BaseModel):
+    entry_id: str
+    subject: Optional[str] = ""
+    sender: Optional[str] = ""
+    body: Optional[str] = None
+    force_refresh: bool = False
+
+class EmailSummaryModel(BaseModel):
+    entry_id: str
+    subject: str
+    sender: str
+    received_time: Optional[str] = ""
+    summary: str
+    action_items: List[str] = []
+    suggested_task: str
+    suggested_duration: int = 30
+    urgency: str = "medium"
+    created_at: Optional[str] = None
 
 
 # --- System Endpoints ---
@@ -349,6 +369,167 @@ def restore_archived_messages(payload: RestoreRequest):
     except Exception as e:
         status_code = 503 if mapi_service.get_mode() == "live" else 500
         raise HTTPException(status_code=status_code, detail=f"Outlook MAPI error ({mapi_service.get_mode()} mode): {e}")
+
+
+# --- AI Email Summarization Engine & Endpoints ---
+def extract_email_ai_insights(subject: str, sender: str, body: str) -> Dict[str, Any]:
+    """
+    Synthesizes an email into an executive summary, concrete action items,
+    a suggested calendar/dayflow task, and estimated duration.
+    Designed with deterministic heuristic NLP for full offline/mock capability
+    and seamless extension to LLM providers when API credentials exist.
+    """
+    import re
+    full_text = f"{subject}\n{body}".strip()
+    lower_text = full_text.lower()
+
+    # 1. Determine Urgency
+    urgent_keywords = ["urgent", "asap", "emergency", "incident", "outage", "escalation", "deadline today", "by 3pm", "by 4pm", "by 5pm"]
+    high_keywords = ["action requested", "action required", "approval", "review needed", "confirm", "decision", "eod", "due"]
+    
+    if any(k in lower_text for k in urgent_keywords):
+        urgency = "urgent"
+    elif any(k in lower_text for k in high_keywords):
+        urgency = "high"
+    else:
+        urgency = "medium"
+
+    # 2. Extract Duration Estimate
+    duration = 30
+    if "quick" in lower_text or "15 min" in lower_text or "brief" in lower_text:
+        duration = 15
+    elif "deep dive" in lower_text or "forecast" in lower_text or "strategy" in lower_text or "audit" in lower_text:
+        duration = 45
+    elif "review" in lower_text or "approve" in lower_text:
+        duration = 30
+
+    # 3. Action Items Extraction
+    action_items = []
+    # Match bullet lines or numbered lines
+    lines = [line.strip("- *•0123456789.)").strip() for line in body.splitlines() if line.strip()]
+    for line in lines:
+        l_lower = line.lower()
+        if any(verb in l_lower for verb in ["please", "need", "could you", "request", "review", "confirm", "prepare", "send", "update", "verify"]):
+            if len(line) > 10 and line not in action_items:
+                action_items.append(line[:120])
+                if len(action_items) >= 3:
+                    break
+
+    if not action_items:
+        # Fallback to key question or request from subject
+        clean_subj = re.sub(r'^(re|fwd|action requested|action required):\s*', '', subject, flags=re.I).strip()
+        if clean_subj:
+            action_items.append(f"Follow up regarding: {clean_subj}")
+        else:
+            action_items.append("Review email details and determine next action")
+
+    # 4. Generate Executive Summary
+    sender_clean = sender.split("<")[0].split("(")[0].strip() or "Sender"
+    clean_subj = re.sub(r'^(re|fwd|action requested|action required):\s*', '', subject, flags=re.I).strip()
+    
+    body_snippet = body.strip().replace("\r\n", " ").replace("\n", " ")[:180]
+    if body_snippet:
+        summary = f"{sender_clean} regarding {clean_subj}: {body_snippet}..."
+    else:
+        summary = f"Inbound message from {sender_clean} regarding {clean_subj}."
+
+    # 5. Suggested Task Title for DayFlow / Calendar
+    suggested_task = f"{clean_subj}"
+    if not any(suggested_task.lower().startswith(v) for v in ["review", "confirm", "check", "finalize", "address", "update"]):
+        suggested_task = f"Address {suggested_task}"
+    if len(suggested_task) > 60:
+        suggested_task = suggested_task[:57] + "..."
+
+    return {
+        "summary": summary,
+        "action_items": action_items,
+        "suggested_task": suggested_task,
+        "suggested_duration": duration,
+        "urgency": urgency
+    }
+
+
+@app.get("/api/emails/summaries", response_model=List[EmailSummaryModel], tags=["AI Email"])
+def get_all_email_summaries_endpoint():
+    """Returns all stored AI email summaries from local SQLite."""
+    return db.get_all_email_summaries()
+
+
+@app.get("/api/emails/summaries/{entry_id}", response_model=EmailSummaryModel, tags=["AI Email"])
+def get_email_summary_endpoint(entry_id: str):
+    """Returns cached AI summary for an email if it exists."""
+    item = db.get_email_summary(entry_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Email summary not found")
+    return item
+
+
+@app.post("/api/emails/summarize", response_model=EmailSummaryModel, tags=["AI Email"])
+def summarize_email_endpoint(payload: EmailSummarizeRequest):
+    """
+    Summarizes a single email on-demand, stores the analysis in local SQLite,
+    and returns actionable insights (summary, action items, task title, duration).
+    """
+    # 1. Check local cache first unless force_refresh is requested
+    if not payload.force_refresh:
+        existing = db.get_email_summary(payload.entry_id)
+        if existing:
+            return existing
+
+    # 2. Obtain email body (either passed in payload or fetched on-demand via MAPI)
+    subject = payload.subject or ""
+    sender = payload.sender or ""
+    body = payload.body or ""
+    received_time = datetime.now().isoformat()
+
+    if not body:
+        try:
+            detail = mapi_service.get_email_detail(payload.entry_id)
+            subject = subject or detail.get("subject", "")
+            sender = sender or detail.get("sender_name", "")
+            body = detail.get("body", "")
+            received_time = detail.get("received_time") or received_time
+        except Exception as e:
+            # Fallback for dev / unreadable items
+            body = body or f"Subject: {subject}. Body inaccessible over MAPI: {e}"
+
+    # 3. Run AI extraction
+    insights = extract_email_ai_insights(subject=subject, sender=sender, body=body)
+
+    # 4. Save to local SQLite
+    save_data = {
+        "entry_id": payload.entry_id,
+        "subject": subject,
+        "sender": sender,
+        "received_time": str(received_time),
+        "summary": insights["summary"],
+        "action_items": insights["action_items"],
+        "suggested_task": insights["suggested_task"],
+        "suggested_duration": insights["suggested_duration"],
+        "urgency": insights["urgency"]
+    }
+    saved_item = db.save_email_summary(save_data)
+
+    # 5. Record non-destructive AI Audit Log entry
+    try:
+        from datetime import datetime as dt
+        db.log_action({
+            "id": f"log-{int(dt.now().timestamp() * 1000)}",
+            "timestamp": dt.now().strftime("%I:%M %p"),
+            "action_type": "EMAIL_AI_SUMMARIZED",
+            "summary": f"AI summarized '{subject[:40]}' -> Recommended task '{insights['suggested_task'][:40]}'",
+            "revertable": False,
+            "status": "applied",
+            "parameters": {
+                "entry_id": payload.entry_id,
+                "urgency": insights["urgency"],
+                "suggested_duration": insights["suggested_duration"]
+            }
+        })
+    except Exception:
+        pass
+
+    return saved_item
 
 
 # Static Frontend Mounting
