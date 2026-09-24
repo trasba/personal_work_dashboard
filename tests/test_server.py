@@ -255,3 +255,43 @@ def test_email_summarization_mock_and_cache():
     assert repeat_res.json()["suggested_task"] == data["suggested_task"]
 
 
+def test_email_summarization_fetches_body_for_missing_preview(monkeypatch):
+    """A placeholder inbox snippet must trigger the on-demand Outlook detail fetch."""
+    client.post("/api/database/reset")
+    calls = []
+    llm_input = {}
+
+    def get_email_detail(entry_id):
+        calls.append(entry_id)
+        return {
+            "subject": "Software F-Systems V4.6.2",
+            "sender_name": "Rainer Wingert",
+            "received_time": "2026-09-24T10:00:00",
+            "body": "Please review the release notes and confirm the upgrade plan.",
+        }
+
+    def summarize_with_captured_body(subject, sender, body):
+        llm_input.update(subject=subject, sender=sender, body=body)
+        return {
+            "summary": "Fetched body was summarized.",
+            "action_items": ["Review the release notes."],
+            "suggested_task": "Review release notes",
+            "suggested_duration": 15,
+            "urgency": "medium",
+        }
+
+    monkeypatch.setattr(mapi_service, "get_email_detail", get_email_detail)
+    monkeypatch.setattr("server._extract_email_llm_insights", summarize_with_captured_body)
+    response = client.post("/api/emails/summarize", json={
+        "entry_id": "msg-missing-preview",
+        "subject": "Software F-Systems V4.6.2",
+        "sender": "Rainer Wingert",
+        "body": "No preview snippet available.",
+        "force_refresh": True,
+    })
+
+    assert response.status_code == 200
+    assert calls == ["msg-missing-preview"]
+    assert llm_input["body"] == "Please review the release notes and confirm the upgrade plan."
+
+

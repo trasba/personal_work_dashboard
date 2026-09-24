@@ -8,13 +8,14 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.9.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.1",
     "pywin32>=308; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
-    "httpx>=0.28.0",
 ]
 
 [tool.pytest.ini_options]

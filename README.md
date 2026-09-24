@@ -56,6 +56,35 @@ Open **`http://127.0.0.1:8000/`** in your browser.
 | `GET/POST` | `/api/audit` | List or append to the immutable AI action audit log. |
 | `PATCH` | `/api/audit/{id}/revert` | Revert an AI action in SQLite and flip status to `reverted`. |
 
+### 4. LLM Email Summaries
+
+The email summarization endpoint uses an OpenAI-compatible chat-completions gateway when all
+three variables below are configured. Create a `.env` file in the project root and fill in the
+API key:
+
+```env
+LLM_API_KEY="paste-your-api-key-here"
+LLM_MODEL="Gemini/google/gemini-3.8-flash"
+LLM_ENDPOINT="https://llm.sdc.siemens.cloud/v1/chat/completions"
+```
+
+`POST /api/emails/summarize` sends the email subject, sender, and body to the configured model
+and asks for JSON containing a summary, action items, suggested task, duration, and urgency.
+The `.env` file is ignored by Git. If the variables are missing or the gateway returns an error,
+the endpoint uses its deterministic local fallback so the dashboard remains usable.
+
+Set `AI_DEBUG="true"` to print the exact LLM prompts and raw gateway responses in the server
+console while diagnosing a request. Set it back to `false` afterward because email contents may
+contain sensitive information. The API key is never printed.
+
+Test the gateway independently with a simple prompt:
+
+```bash
+uv run python scripts/test_llm_gateway.py "Can you hear me?"
+```
+
+The script prints the HTTP status and either the model response or the gateway's raw error body.
+
 
 
 ---
