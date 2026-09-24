@@ -11,9 +11,56 @@ import { renderMetrics } from "./metrics.js";
 import { logAiAction } from "../ai-engine.js";
 import { renderAuditLogView } from "./auditlog.js";
 
+/**
+ * Strips raw Exchange X.500 DNs and parses sender display name and department/email meta.
+ */
+export function parseSender(rawSender) {
+  if (!rawSender) return { name: "Outlook Contact", meta: "", initials: "✉️" };
+
+  // 1. Strip raw Exchange DN paths like (/O=EXCHANGELABS/OU=.../CN=...) or /O=... or /CN=...
+  let cleaned = rawSender.replace(/\s*\(\/[Oo]=[^)]+\)?/gi, "").trim();
+  cleaned = cleaned.replace(/\s*\/[Oo]=[^\s)]+/gi, "").trim();
+  cleaned = cleaned.replace(/\/CN=[^\s)]+/gi, "").trim();
+
+  // Balance any dangling parentheses left from truncated DNs
+  const openCount = (cleaned.match(/\(/g) || []).length;
+  const closeCount = (cleaned.match(/\)/g) || []).length;
+  if (openCount > closeCount) {
+    cleaned += ")".repeat(openCount - closeCount);
+  }
+
+  let name = cleaned;
+  let meta = "";
+
+  // 2. Extract parenthesized department, role, or email if present at end
+  const match = cleaned.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+  if (match) {
+    name = match[1].trim();
+    meta = match[2].trim();
+  }
+
+  // 3. Generate 1-2 letter initials
+  let initials = "✉️";
+  const nameParts = name.replace(/[^\w\s,]/g, "").split(/[,\s]+/).filter(Boolean);
+  if (nameParts.length >= 2) {
+    initials = (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+  } else if (nameParts.length === 1 && nameParts[0].length >= 2) {
+    initials = nameParts[0].substring(0, 2).toUpperCase();
+  }
+
+  return { name, meta, initials };
+}
+
 export function renderMailFeedView() {
   const container = document.getElementById("mailFeedGridContainer");
   if (!container) return;
+
+  const statsPill = document.getElementById("mailFeedStatsPill");
+  if (statsPill) {
+    const total = state.inboundEmails ? state.inboundEmails.length : 0;
+    const analyzed = state.inboundEmails ? state.inboundEmails.filter(e => Boolean(e.suggestedTask)).length : 0;
+    statsPill.textContent = `${total} Email${total === 1 ? '' : 's'}${analyzed > 0 ? ` • ${analyzed} Analyzed` : ''}`;
+  }
 
   if (!state.inboundEmails || state.inboundEmails.length === 0) {
     container.innerHTML = `
@@ -34,6 +81,8 @@ export function renderMailFeedView() {
 
   container.innerHTML = state.inboundEmails.map(mail => {
     const isAiProcessed = Boolean(mail.suggestedTask);
+    const senderInfo = parseSender(mail.sender);
+    const hasRealSnippet = mail.snippet && mail.snippet.trim() && mail.snippet !== "No preview snippet available.";
     
     let actionItemsHtml = "";
     if (mail.actionItems && Array.isArray(mail.actionItems) && mail.actionItems.length > 0) {
@@ -41,7 +90,7 @@ export function renderMailFeedView() {
         <div class="ai-actions-checklist">
           ${mail.actionItems.map(item => `
             <div class="ai-action-item">
-              <span class="ai-action-bullet">›</span>
+              <span class="ai-action-bullet">✓</span>
               <span>${escapeHtml(item)}</span>
             </div>
           `).join("")}
@@ -51,16 +100,24 @@ export function renderMailFeedView() {
 
     const aiBoxHtml = isAiProcessed ? `
       <div class="ai-extraction-box">
-        <span class="ai-ext-title">✨ AI SUMMARY & ACTION RECOMMENDATION:</span>
-        <span class="ai-ext-desc">"${escapeHtml(mail.suggestedTask)}" (${mail.duration || 30}m)</span>
-        ${mail.aiSummary ? `<div style="font-size: 0.77rem; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(mail.aiSummary)}</div>` : ''}
+        <div class="ai-ext-header">
+          <div class="ai-ext-badge">
+            <span class="sparkle-dot"></span>
+            <span>AI ACTION RECOMMENDATION</span>
+          </div>
+          <span class="ai-duration-pill">⏱️ ${mail.duration || 30}m</span>
+        </div>
+        <div class="ai-suggested-task">"${escapeHtml(mail.suggestedTask)}"</div>
+        ${mail.aiSummary ? `<div class="ai-summary-text">${escapeHtml(mail.aiSummary)}</div>` : ''}
         ${actionItemsHtml}
       </div>
     ` : `
-      <div class="raw-email-indicator">
-        <span class="raw-dot"></span>
-        <span class="raw-text">Raw message • Not processed by AI</span>
-        <button class="mail-summarize-btn" id="btn-summarize-${mail.id}" onclick="window.aurawork.summarizeSingleEmail('${mail.id}')" title="Run AI on this email">
+      <div class="mail-unprocessed-cta">
+        <div class="mail-unprocessed-info">
+          <span class="raw-dot"></span>
+          <span class="raw-text">Awaiting AI extraction</span>
+        </div>
+        <button class="mail-summarize-btn" id="btn-summarize-${mail.id}" onclick="window.aurawork.summarizeSingleEmail('${mail.id}')" title="Run AI summarization on this email">
           <span>✨ AI Summarize</span>
         </button>
       </div>
@@ -72,36 +129,44 @@ export function renderMailFeedView() {
       </button>
     ` : `
       <button class="btn btn-secondary btn-sm" onclick="window.aurawork.convertEmailToTask('${mail.id}')">
-        + Create Task from Email
+        + Create Task
       </button>
     `;
 
     return `
-      <div class="mailfeed-card" id="card-${mail.id}">
+      <div class="mailfeed-card ${isAiProcessed ? 'is-analyzed' : ''}" id="card-${mail.id}">
         <div class="mailfeed-header">
-          <div class="mail-sender-box">
-            <span class="mail-sender-name">${escapeHtml(mail.sender)}</span>
+          <div class="mail-sender-profile">
+            <div class="mail-avatar">${escapeHtml(senderInfo.initials)}</div>
+            <div class="mail-sender-text">
+              <span class="mail-sender-name" title="${escapeHtml(senderInfo.name)}">${escapeHtml(senderInfo.name)}</span>
+              ${senderInfo.meta ? `<span class="mail-sender-meta" title="${escapeHtml(senderInfo.meta)}">${escapeHtml(senderInfo.meta)}</span>` : ''}
+            </div>
+          </div>
+          <div class="mail-header-meta">
+            <span class="mail-urgency-pill ${mail.priority || 'medium'}">${escapeHtml(mail.urgencyText || (mail.priority ? mail.priority.toUpperCase() : 'INBOX'))}</span>
             <span class="mail-time">${mail.time}</span>
           </div>
-          <span class="mail-urgency-pill ${mail.priority || 'medium'}">${escapeHtml(mail.urgencyText || (mail.priority ? mail.priority.toUpperCase() : 'INBOX'))}</span>
         </div>
-        <div class="mail-subject">${escapeHtml(mail.subject)}</div>
-        <div class="mail-snippet">${escapeHtml(mail.snippet)}</div>
+
+        <div class="mail-subject" title="${escapeHtml(mail.subject)}">${escapeHtml(mail.subject)}</div>
+        
+        ${hasRealSnippet && !isAiProcessed ? `<div class="mail-snippet">${escapeHtml(mail.snippet)}</div>` : ''}
         
         ${aiBoxHtml}
 
         <div class="mail-card-footer">
           ${addActionBtn}
-          <div style="display: flex; gap: 6px; align-items: center;">
+          <div class="mail-secondary-actions">
             ${isAiProcessed ? `
-              <button class="mail-summarize-btn" onclick="window.aurawork.summarizeSingleEmail('${mail.id}', true)" title="Re-run AI extraction" style="padding: 3px 7px; font-size: 0.68rem;">
+              <button class="btn-card-action" onclick="window.aurawork.summarizeSingleEmail('${mail.id}', true)" title="Re-run AI extraction">
                 ↻ Re-run
               </button>
             ` : ''}
             <button class="teach-rule-btn" onclick="window.aurawork.teachEmailCleanUp('${mail.id}', 'sender')" title="Teach AI to archive future emails from this sender">
-              🧠 Learn Sender
+              🧠 Filter Sender
             </button>
-            <button class="chip chip-ghost" onclick="window.aurawork.dismissEmail('${mail.id}')">
+            <button class="btn-card-action" onclick="window.aurawork.dismissEmail('${mail.id}')" title="Dismiss from action feed">
               Dismiss
             </button>
           </div>
@@ -127,20 +192,23 @@ export function renderMiniInboundDigest() {
     return;
   }
 
-  container.innerHTML = state.inboundEmails.slice(0, 2).map(mail => `
-    <div class="digest-item" id="${mail.id}">
-      <div class="digest-item-content">
-        <div class="digest-item-subject">${escapeHtml(mail.subject)}</div>
-        <div class="digest-item-meta">From: ${escapeHtml(mail.sender)} • ${mail.time}</div>
+  container.innerHTML = state.inboundEmails.slice(0, 2).map(mail => {
+    const senderInfo = parseSender(mail.sender);
+    return `
+      <div class="digest-item" id="${mail.id}">
+        <div class="digest-item-content">
+          <div class="digest-item-subject">${escapeHtml(mail.subject)}</div>
+          <div class="digest-item-meta">From: ${escapeHtml(senderInfo.name)} • ${mail.time}</div>
+        </div>
+        <div class="digest-item-actions">
+          <button class="btn-convert" onclick="window.aurawork.convertEmailToTask('${mail.id}')">
+            + Task (${mail.duration}m)
+          </button>
+          <button class="btn-dismiss-mini" onclick="window.aurawork.dismissEmail('${mail.id}')" title="Dismiss">✕</button>
+        </div>
       </div>
-      <div class="digest-item-actions">
-        <button class="btn-convert" onclick="window.aurawork.convertEmailToTask('${mail.id}')">
-          + Task (${mail.duration}m)
-        </button>
-        <button class="btn-dismiss-mini" onclick="window.aurawork.dismissEmail('${mail.id}')" title="Dismiss">✕</button>
-      </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
 export function convertEmailToTask(emailId) {
@@ -223,12 +291,22 @@ export async function fetchOutlookEmails(manual = false) {
             } catch (_) {}
           }
 
+          let senderDisplay = msg.sender_name || msg.sender_email || "Outlook Contact";
+          if (msg.sender_email && !msg.sender_email.startsWith("/") && !msg.sender_email.toLowerCase().includes("/cn=")) {
+            if (msg.sender_name && !msg.sender_name.includes(msg.sender_email)) {
+              senderDisplay = `${msg.sender_name} (${msg.sender_email})`;
+            }
+          }
+
+          const rawSnippet = msg.body_snippet ? msg.body_snippet.trim() : "";
+          const cleanSnippet = (rawSnippet && rawSnippet !== "No preview snippet available.") ? rawSnippet : "";
+
           return {
             id: msg.entry_id || `mail-mapi-${idx}`,
-            sender: msg.sender_name ? `${msg.sender_name} (${msg.sender_email || 'Outlook'})` : (msg.sender_email || "Outlook Contact"),
+            sender: senderDisplay,
             subject: msg.subject || "(No Subject)",
             time: timeDisplay,
-            snippet: msg.body_snippet || "No preview snippet available.",
+            snippet: cleanSnippet,
             // IMPORTANT: Strictly raw / unprocessed by AI at fetch time
             suggestedTask: null,
             duration: 30,
@@ -332,11 +410,14 @@ export async function summarizeSingleEmail(emailId, forceRefresh = false) {
   }
 
   try {
+    const rawSnippet = email.snippet ? email.snippet.trim() : "";
+    const cleanBody = (rawSnippet && rawSnippet !== "No preview snippet available.") ? rawSnippet : "";
+
     const res = await apiRequest("/api/emails/summarize", "POST", {
       entry_id: email.id,
       subject: email.subject,
       sender: email.sender,
-      body: email.snippet || "",
+      body: cleanBody,
       force_refresh: forceRefresh
     });
 

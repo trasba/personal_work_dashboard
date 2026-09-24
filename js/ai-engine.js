@@ -161,7 +161,8 @@ export function teachEmailCleanUp(emailId, ruleType) {
 
   let ruleLabel = "";
   if (ruleType === "sender") {
-    ruleLabel = `Sender: '${mail.sender.split('(')[0].trim()}'`;
+    const cleanSender = mail.sender.replace(/\s*\(\/[Oo]=[^)]+\)?/gi, "").replace(/\s*\/[Oo]=[^\s)]+/gi, "").split('(')[0].trim();
+    ruleLabel = `Sender: '${cleanSender || 'Sender'}'`;
   } else {
     ruleLabel = `Subject contains: '${mail.subject.substring(0, 24)}...'`;
   }

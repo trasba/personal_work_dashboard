@@ -162,6 +162,8 @@ class OutlookMapiService:
                         subject = getattr(msg, "Subject", "(No Subject)")
                         sender = getattr(msg, "SenderName", "")
                         sender_email = getattr(msg, "SenderEmailAddress", "")
+                        if sender_email and (sender_email.startswith("/") or "/cn=" in sender_email.lower()):
+                            sender_email = ""
                         received_time = getattr(msg, "ReceivedTime", None)
 
                         # Omit upfront .Body access: keeps inbox listing instant
@@ -215,6 +217,8 @@ class OutlookMapiService:
                 subject = getattr(item, "Subject", "(No Subject)")
                 sender = getattr(item, "SenderName", "")
                 sender_email = getattr(item, "SenderEmailAddress", "")
+                if sender_email and (sender_email.startswith("/") or "/cn=" in sender_email.lower()):
+                    sender_email = ""
                 received_time = getattr(item, "ReceivedTime", None)
                 body = getattr(item, "Body", "") or ""
 
